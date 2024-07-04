@@ -19,7 +19,7 @@ There are five different types of instructions supported by the virtual machine.
 
 In the direct threading model, each operation code directly points to its corresponding execution code. This means that when an opcode is executed, it jumps directly to the code that implements that operation.
 
-The example Instruction Table:
+The example of instruction Table:
 ``` Forth
 ' RET instructions 0 cells + ! 
 ' HALT instructions 1 cells + ! 
