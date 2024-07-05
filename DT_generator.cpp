@@ -102,20 +102,6 @@ variable program \ the pointer to indicate the current program
 : PRINT ( n -- )
   dup . ;
 
-: NEXTI ( -- )
-    ip @ 1 cells + ip ! \ increment the instruction pointer 
-    instructions ip @ @ cells + @ execute ;
-
-: SWITCH ( -- )
-    instructions ip @ @ cells + @ execute
-    ;
-
-: SAVE ( -- )
-    ip @ 
-    rsp @ ! \ push the return address to the return stack
-    rsp @ 1 cells + rsp !  \ increment the return stack pointer ;
-    ; 
-
 : add-string ( addr len -- )
     buffer-pos @
     over string-buffers + swap move
@@ -153,8 +139,9 @@ variable program \ the pointer to indicate the current program
 : RET ( -- )
 
     rsp @ 1 cells - rsp ! \ decrement the return stack pointer
-    rsp @ @ ip ! \ pop the return address from the return stack ;
-    NEXTI ;
+    rsp @ @ ip ! \ pop the return address from the return stack 
+    ip @ 1 cells + ip ! \ increment the instruction pointer
+    instructions ip @ @ cells + @ execute ;
 
 ( ------------------------------------------------- )
 
@@ -172,7 +159,8 @@ variable maxdepth \ the maximum depth of the stack
                 for(auto c: x->name){
                     code += "    " + to_string((unsigned)c) + " extend-char\n";
                 }
-                code += "    NEXTI ;\n";
+                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
+                code += "    instructions ip @ @ cells + @ execute ;\n";
             } else if (x->tp == Type::non_terminal) {
                 for(int i=0;i<x->subnode.size();i++){
                     code += "create func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 2 cells allot\n";
@@ -184,9 +172,12 @@ variable maxdepth \ the maximum depth of the stack
                 for(auto c: shortcut[x]){
                     code += "        " + to_string((unsigned)c) + " extend-char\n";
                 }
-                code += "        NEXTI\n";
+                code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
+                code += "         instructions ip @ @ cells + @ execute \n";
                 code += "    else\n";
-                code += "        SAVE\n";
+                code += "        ip @ \n";
+                code += "        rsp @ ! \\ push the return address to the return stack \n";
+                code += "        rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "        " + to_string(x->subnode.size()) + " random\n";
                 code += "        case\n";
                 for(int i=0;i<x->subnode.size();i++){
@@ -194,7 +185,7 @@ variable maxdepth \ the maximum depth of the stack
                     code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
                 }
                 code += "        endcase\n";
-                code += "        SWITCH \n";
+                code += "        instructions ip @ @ cells + @ execute \n";
                 code += "    endif ; \n\n";
             } else {
                 code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " +to_string(x->subnode.size()+1) + " cells allot\n";
@@ -207,11 +198,14 @@ variable maxdepth \ the maximum depth of the stack
                 for(auto c: shortcut[x]){
                     code += "        " + to_string((unsigned)c) + " extend-char \n";
                 }
-                code += "        NEXTI\n";
+                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
+                code += "    instructions ip @ @ cells + @ execute \n";
                 code += "    else\n";
-                code += "    SAVE\n";
+                code += "    ip @ \n";
+                code += "    rsp @ ! \\ push the return address to the return stack \n";
+                code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
-                code += "    SWITCH \n";
+                code += "    instructions ip @ @ cells + @ execute \n";
                 code += "    endif ; \n\n";
             }
         }
@@ -227,11 +221,12 @@ variable maxdepth \ the maximum depth of the stack
         // }
         code += to_string(instruction_table[this->start]) + " init-program 0 cells + ! \n";
         code += "1 init-program 1 cells + ! \n";
-        string entry_benchmark_off = R"(: exe ( -- )
+        string entry_benchmark_off = R"(: exe ( -- )  
     init-program ip ! ( get the inital address of the program )
     0 buffer-pos ! \ init the buffer position
     instructions ip @ @ cells + @ execute  \ start the program
     output ;
+
 exe)";  
         string entry_benchmark_on = R"(variable start  \ Stores the start time for performance measurement
 variable sum    \ Accumulates the sum of values for throughput calculation
