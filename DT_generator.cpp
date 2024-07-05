@@ -80,7 +80,7 @@ public:
     {
         string code = R"(include random.fs
 variable buffer-pos
-create string-buffers 2048 chars allot
+create string-buffers 1024 1024 * chars allot
 
 create instructions 1000 cells allot 
 
@@ -233,7 +233,35 @@ variable maxdepth \ the maximum depth of the stack
     instructions ip @ @ cells + @ execute  \ start the program
     output ;
 exe)";  
-        string entry_benchmark_on = "";
+        string entry_benchmark_on = R"(variable start  \ Stores the start time for performance measurement
+variable sum    \ Accumulates the sum of values for throughput calculation
+0 sum ! 
+: exe ( -- )
+    utime start !  \ Record the start time in microseconds
+    0 
+    begin  \ Start an infinite loop
+        dup 0xfff and 0 = if  \ Every 4096 iterations, execute the following block
+            utime start @ -  \ Calculate elapsed time in microseconds
+            #1000000 um/mod nip s>f \ Convert microseconds to seconds as floating-point
+            sum @ s>f  \ Convert 'sum' from integer to floating-point
+            \ Check FStack before division to ensure two numbers are present
+            fdepth 2 >= if
+                f/  \ Calculate bytes/sec rate
+                1024e f/ 1024e f/  \ Convert to MB/s
+                f. ." MB/s" cr  \ Display throughput rate
+            else
+                ." FStack underflow error during division" cr
+            then
+            utime start !  \ Update start time to current time
+            0 sum !  \ Reset sum to zero
+        then
+        init-program ip !  \ Get the initial address of the program
+        0 buffer-pos !  \ Initialize buffer position
+        instructions ip @ @ cells + @ execute  \ Execute program instructions
+        sum @ buffer-pos @ + sum ! 
+        1+  \ Increment the loop counter
+    again ;  \ Continue looping indefinitely
+exe)";
         if(show){
             code += entry_benchmark_on;
         } else {
