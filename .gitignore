@@ -1,4 +1,4 @@
 *.fth
 .vscode
-./generator
-./temp
+generator
+temp
