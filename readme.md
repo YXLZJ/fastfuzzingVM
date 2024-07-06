@@ -115,7 +115,6 @@ create exp_94601359220720 3 cells allot
     instructions ip @ @ cells + @ execute 
     endif ; 
 ```
-The contol flow of the program is leaded by NETXI and SWITCH
 
 The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Direct Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
 
@@ -124,4 +123,4 @@ How to use
 $ clang++ -std=c++20 -stdlib=libc++ DT_generator.cpp -o generator
 ./generator -path <grammar.json> -depth <depth of recursion> -o <output forth file> [--show(enable enable benchmark)]
 ```
-C++ is used to compile grammars into virtual machine, please make sure your C++ toolchain support C++20 or above.
+C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.
