@@ -55,65 +55,73 @@ The example of instruction Table:
 
 Example of terminal instrution
 ``` Forth
-: func_5527070496 ( -- )
-    47 extend-char
-    NEXTI ;
+: func_94601359250096 ( -- )
+    120 extend-char
+    109 extend-char
+    112 extend-char
+    ip @ 1 cells + ip ! \ increment the instruction pointer
+    instructions ip @ @ cells + @ execute ;
 ```
 
 Example of non-terminal instrution
 ``` Forth
-create func_5527066128_op0 2 cells allot
-22 func_5527066128_op0 0 cells + !
-0 func_5527066128_op0 1 cells + !
 
-create func_5527066128_op1 2 cells allot
-5 func_5527066128_op1 0 cells + !
-0 func_5527066128_op1 1 cells + !
+create func_94601359144576_op0 2 cells allot
+500 func_94601359144576_op0 0 cells + !
+0 func_94601359144576_op0 1 cells + !
 
-: func_5527066128 ( -- )
+create func_94601359144576_op1 2 cells allot
+501 func_94601359144576_op1 0 cells + !
+0 func_94601359144576_op1 1 cells + !
+
+: func_94601359144576 ( -- )
     getdepth  maxdepth @ > if
-        57 extend-char
-        NEXTI
+         ip @ 1 cells + ip ! \ increment the instruction pointer
+         instructions ip @ @ cells + @ execute 
     else
-        SAVE
+        ip @ 
+        rsp @ ! \ push the return address to the return stack 
+        rsp @ 1 cells + rsp !  \ increment the return stack pointer 
         2 random
         case
             0 of
-                func_5527066128_op0 ip ! endof
+                func_94601359144576_op0 ip ! endof
             1 of
-                func_5527066128_op1 ip ! endof
+                func_94601359144576_op1 ip ! endof
         endcase
-        SWITCH 
+        instructions ip @ @ cells + @ execute 
     endif ; 
 ```
 
 Example of production rule
 ``` Forth
-create exp_5527069088 4 cells allot
-7 exp_5527069088 0 cells + !
-19 exp_5527069088 1 cells + !
-3 exp_5527069088 2 cells + !
-0 exp_5527069088 3 cells + !
-: func_5527069088 ( -- )
+create exp_94601359220720 3 cells allot
+95 exp_94601359220720 0 cells + !
+94 exp_94601359220720 1 cells + !
+0 exp_94601359220720 2 cells + !
+: func_94601359220720 ( -- )
     getdepth  maxdepth @ > if
-        57 extend-char 
-        43 extend-char 
-        57 extend-char 
-        NEXTI
+        60 extend-char 
+        104 extend-char 
+        114 extend-char 
+        62 extend-char 
+    ip @ 1 cells + ip ! \ increment the instruction pointer
+    instructions ip @ @ cells + @ execute 
     else
-    SAVE
-    exp_5527069088 ip !
-    SWITCH 
+    ip @ 
+    rsp @ ! \ push the return address to the return stack 
+    rsp @ 1 cells + rsp !  \ increment the return stack pointer 
+    exp_94601359220720 ip !
+    instructions ip @ @ cells + @ execute 
     endif ; 
 ```
 The contol flow of the program is leaded by NETXI and SWITCH
 
-``` Forth
-: NEXTI ( -- )
-    ip @ 1 cells + ip ! \ increment the instruction pointer 
-    instructions ip @ @ cells + @ execute ;
+The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Direct Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
 
-: SWITCH ( -- )
-    instructions ip @ @ cells + @ execute ;
+How to use
 ```
-The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Direct Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, **NEXTI** and **SWITCH** are always be called as the last statement.
+$ clang++ -std=c++20 -stdlib=libc++ DT_generator.cpp -o generator
+./generator -path <grammar.json> -depth <depth of recursion> -o <output forth file> [--show(enable enable benchmark)]
+```
+C++ is used to compile grammars into virtual machine, please make sure your C++ toolchain support C++20 or above.
