@@ -141,7 +141,7 @@ variable program \ the pointer to indicate the current program
     rsp @ 1 cells - rsp ! \ decrement the return stack pointer
     rsp @ @ ip ! \ pop the return address from the return stack 
     ip @ 1 cells + ip ! \ increment the instruction pointer
-    instructions ip @ @ cells + @ execute ;
+    ;
 
 ( ------------------------------------------------- )
 
@@ -159,8 +159,8 @@ variable maxdepth \ the maximum depth of the stack
                 for(auto c: x->name){
                     code += "    " + to_string((unsigned)c) + " extend-char\n";
                 }
-                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
-                code += "    instructions ip @ @ cells + @ execute ;\n";
+                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
+                code += "    ; \n\n";
             } else if (x->tp == Type::non_terminal) {
                 for(int i=0;i<x->subnode.size();i++){
                     code += "create func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 2 cells allot\n";
@@ -173,7 +173,6 @@ variable maxdepth \ the maximum depth of the stack
                     code += "        " + to_string((unsigned)c) + " extend-char\n";
                 }
                 code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
-                code += "         instructions ip @ @ cells + @ execute \n";
                 code += "    else\n";
                 code += "        ip @ \n";
                 code += "        rsp @ ! \\ push the return address to the return stack \n";
@@ -185,7 +184,6 @@ variable maxdepth \ the maximum depth of the stack
                     code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
                 }
                 code += "        endcase\n";
-                code += "        instructions ip @ @ cells + @ execute \n";
                 code += "    endif ; \n\n";
             } else {
                 code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " +to_string(x->subnode.size()+1) + " cells allot\n";
@@ -199,13 +197,11 @@ variable maxdepth \ the maximum depth of the stack
                     code += "        " + to_string((unsigned)c) + " extend-char \n";
                 }
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
-                code += "    instructions ip @ @ cells + @ execute \n";
                 code += "    else\n";
                 code += "    ip @ \n";
                 code += "    rsp @ ! \\ push the return address to the return stack \n";
                 code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
-                code += "    instructions ip @ @ cells + @ execute \n";
                 code += "    endif ; \n\n";
             }
         }
@@ -221,10 +217,19 @@ variable maxdepth \ the maximum depth of the stack
         // }
         code += to_string(instruction_table[this->start]) + " init-program 0 cells + ! \n";
         code += "1 init-program 1 cells + ! \n";
+        code += R"(: mainloop
+    1 running !
+    0 buffer-pos !
+    begin
+        running @
+    while
+        instructions ip @ @ cells + @ execute
+    repeat
+;
+)";
         string entry_benchmark_off = R"(: exe ( -- )  
     init-program ip ! ( get the inital address of the program )
-    0 buffer-pos ! \ init the buffer position
-    instructions ip @ @ cells + @ execute  \ start the program
+    mainloop
     output ;
 
 exe)";  
@@ -251,9 +256,9 @@ variable sum    \ Accumulates the sum of values for throughput calculation
             0 sum !  \ Reset sum to zero
         then
         init-program ip !  \ Get the initial address of the program
-        0 buffer-pos !  \ Initialize buffer position
-        instructions ip @ @ cells + @ execute  \ Execute program instructions
-        sum @ buffer-pos @ + sum ! 
+        mainloop
+        sum @ buffer-pos @ + sum !
+        0 buffer-pos !
         1+  \ Increment the loop counter
     again ;  \ Continue looping indefinitely
 exe)";
