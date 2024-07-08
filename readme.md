@@ -15,7 +15,7 @@ There are five different types of instructions supported by the virtual machine.
 
 ## Threading Models 
 
-### Direct Threading Model
+### Indirect Threading Model
 
 In the direct threading model, each operation code directly points to its corresponding execution code. This means that when an opcode is executed, it jumps directly to the code that implements that operation.
 
@@ -120,7 +120,7 @@ The instruction pointer(IP) always indicate to the next instruction to be execut
 
 How to use
 ```
-$ clang++ -std=c++20 -stdlib=libc++ DT_generator.cpp -o generator
+$ clang++ -std=c++20 -stdlib=libc++ IDT_generator.cpp -o generator
 ./generator -path <grammar.json> -depth <depth of recursion> -o <output forth file> [--show(enable enable benchmark)]
 ```
 C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.
