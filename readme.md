@@ -118,6 +118,10 @@ create exp_94601359220720 3 cells allot
 
 The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Direct Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
 
+### Direct Threading Model
+
+Deleted the instruction table, and embeded the operation code into the program. 
+
 How to use
 ```
 $ clang++ -std=c++20 -stdlib=libc++ IDT_generator.cpp -o generator
