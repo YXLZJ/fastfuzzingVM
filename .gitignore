@@ -1,4 +1,7 @@
 *.fth
 .vscode
 generator
+IDT_generator
+DT_generator
+subroutine_generator
 temp

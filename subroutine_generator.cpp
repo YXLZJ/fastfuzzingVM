@@ -7,6 +7,8 @@
 #include <format>
 #include <queue>
 #include <cstdlib>
+#include <algorithm>
+#include <set>
 #include "json.hpp"
 
 using namespace std;
@@ -78,6 +80,7 @@ public:
 
     void JIT(string file, bool show)
     {
+        cout<<this->nodes.size() <<" "<< this->reverse_nodes.size()<<endl;
         string code = R"(include random.fs
 variable buffer-pos
 create string-buffers 1024 1024 * chars allot
@@ -131,118 +134,82 @@ variable program \ the pointer to indicate the current program
 
 ( ------------------------------------------------- )
 
-: HALT ( -- )
-    0 running ! ;
+: HALT  ;
 
 ( ------------------------------------------------- )
 
-: RET ( -- )
-
-    rsp @ 1 cells - rsp ! \ decrement the return stack pointer
-    rsp @ @ ip ! \ pop the return address from the return stack 
-    ip @ 1 cells + ip ! \ increment the instruction pointer
-    ;
+: RET  ;
 
 ( ------------------------------------------------- )
 
 variable maxdepth \ the maximum depth of the stack
 )";
-        map<Node*,int> instruction_table; // the address of the instruction in the instruction table for direct threading model
-        code += to_string(this->maxdepth) + " maxdepth !\n\n"; // set the maxdepth
-        code += "create init-program 2 cells allot \n";
-
-        for(auto x: this->nodes) {
-            if(x->tp == Type :: non_terminal) {
-                for(int i = 0; i<x->subnode.size(); i++){
-                    code += "create func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 2 cells allot\n";
-                }
-            } else if(x->tp == Type :: expression ) {
-                code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " +to_string(x->subnode.size()+1) + " cells allot\n";
-            }
-        }
-
-        for(auto x: this->nodes) {
+        code += to_string(this->maxdepth) + " maxdepth !\n"; // set the maxdepth
+        // create function signature, please it my introduce extra complexity
+        for(auto x : nodes)
+        {
+            code += "defer func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
+        } 
+        for (auto x : nodes)
+        {
             code += "( ------------------------------------------------- )\n\n";
-            if(x->tp == Type::terminal ){
-                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                for(auto c: x->name){
+            if (x->tp == Type::terminal)
+            {
+                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
+                for (auto c : x->name)
+                {
                     code += "    " + to_string((unsigned)c) + " extend-char\n";
                 }
-                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    ; \n\n";
-            } else if (x->tp == Type::non_terminal) {
-                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                code += "    getdepth  maxdepth @ > if\n";
-                for(auto c: shortcut[x]){
+                code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
+            }
+            else if (x->tp == Type::non_terminal)
+            {
+                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
+                code += "    dp maxdepth @ > if\n";
+                for (auto c : shortcut[x])
+                {
                     code += "        " + to_string((unsigned)c) + " extend-char\n";
                 }
-                code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
                 code += "    else\n";
-                code += "        ip @ \n";
-                code += "        rsp @ ! \\ push the return address to the return stack \n";
-                code += "        rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "        " + to_string(x->subnode.size()) + " random\n";
                 code += "        case\n";
-                for(int i=0;i<x->subnode.size();i++){
+                for (int i = 0; i < x->subnode.size(); i++)
+                {
                     code += "            " + to_string(i) + " of\n";
-                    code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
+                    code += "                dp 1 + func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + " endof\n";
                 }
                 code += "        endcase\n";
                 code += "    endif ; \n\n";
-            } else {
-                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                code += "    getdepth  maxdepth @ > if\n";
-                for(auto c: shortcut[x]){
+                code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
+            }
+            else
+            {
+                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
+                code += "    dp maxdepth @ > if\n";
+                for (auto c : shortcut[x])
+                {
                     code += "        " + to_string((unsigned)c) + " extend-char \n";
                 }
-                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
                 code += "    else\n";
-                code += "    ip @ \n";
-                code += "    rsp @ ! \\ push the return address to the return stack \n";
-                code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
-                code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
+                for(auto s :x->subnode)
+                {
+                    code += "    dp 1 + func_" + to_string(reinterpret_cast<uintptr_t>(s))+"\n";
+                }
                 code += "    endif ; \n\n";
+                code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
             }
         }
+        code += "( ------------------------------------------------- )\n\n";
 
-        for(auto x: this->nodes) {
-            if(x->tp == Type :: non_terminal) {
-                for(int i=0;i<x->subnode.size();i++){
-                    code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i]))  + " func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 0 cells + !\n";
-                    code +=  "\' RET func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 1 cells + !\n\n";
-                }
-            } else if(x->tp == Type :: expression ) {
-                for(int i=0;i<x->subnode.size();i++){
-                    code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + " exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(i) + " cells + !\n";
-                }
-                code  += "\' RET exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size()) + " cells + !\n";
-            }
-        }
-        
-        code += "create init-program 2 cells allot \n";
-        code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(this->start))+ " init-program 0 cells + ! \n";
-        code += "\' HALT init-program 1 cells + ! \n";
-
-        code += R"(: mainloop
-    1 running !
-    0 buffer-pos !
-    begin
-        running @
-    while
-        ip @  @ execute
-    repeat
-;
-)";
-        string entry_benchmark_off = R"(: exe 
-    init-program ip ! ( get the inital address of the program )
-    mainloop
-    output ;
-
-exe)";  
+        string entry_benchmark_off = ": exe  \n";
+        entry_benchmark_off += "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
+        entry_benchmark_off += "    output ; \n ";
+        entry_benchmark_off += "exe\n";
         string entry_benchmark_on = R"(variable start  \ Stores the start time for performance measurement
 variable sum    \ Accumulates the sum of values for throughput calculation
 0 sum ! 
-: exe ( -- )
+: exe 
     utime start !  \ Record the start time in microseconds
     0 
     begin  \ Start an infinite loop
@@ -261,16 +228,19 @@ variable sum    \ Accumulates the sum of values for throughput calculation
             utime start !  \ Update start time to current time
             0 sum !  \ Reset sum to zero
         then
-        init-program ip !  \ Get the initial address of the program
-        mainloop
-        sum @ buffer-pos @ + sum !
+)";
+        entry_benchmark_on += "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
+        entry_benchmark_on += R"(sum @ buffer-pos @ + sum !
         0 buffer-pos !
         1+  \ Increment the loop counter
     again ;  \ Continue looping indefinitely
 exe)";
-        if(show){
+        if (show)
+        {
             code += entry_benchmark_on;
-        } else {
+        }
+        else
+        {
             code += entry_benchmark_off;
         }
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
@@ -286,6 +256,7 @@ private:
     Node *start;
     unsigned maxdepth;
     map<Node *, string> shortcut;
+    vector<Node *> reverse_nodes;
     Node *allocate_node(string name, Type tp)
     {
         Node *newnode = new Node();
@@ -302,9 +273,10 @@ private:
         mp[newnode->name] = newnode;
         return newnode;
     }
-
+    // reuse this fucntion to get the sequence of function
     void getshortcut()
     {
+        //initailize all the termianlal nodes as approchable
         for (auto &i : nodes)
         {
             if (i->tp == Type::terminal)
@@ -362,6 +334,26 @@ private:
             }
         }
     }
+    // // BFS to get the level-orderd sequence of nodes and reverse it 
+    // void getReversedNodes() {
+    //     queue<Node *> q;
+    //     set <Node *> visited;
+    //     q.push(this->start);
+    //     while (!q.empty()) {
+    //         Node* newnode = q.front();
+    //         q.pop();
+    //         //Skip it if it has been visited
+    //         if (visited.count(newnode)) continue;
+    //         visited.insert(newnode);
+    //         this->reverse_nodes.push_back(newnode);
+    //         for (auto x : newnode->subnode) {
+    //             if (visited.count(x) == 0) {
+    //                 q.push(x);
+    //             }
+    //         }
+    //     }
+    //     reverse(reverse_nodes.begin(),reverse_nodes.end());
+    // }
 };
 
 int main(int argc, char *argv[])

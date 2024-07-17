@@ -17,7 +17,7 @@ There are five different types of instructions supported by the virtual machine.
 
 ### Indirect Threading Model
 
-In the direct threading model, each operation code directly points to its corresponding execution code. This means that when an opcode is executed, it jumps directly to the code that implements that operation.
+In the direct threading model, each operation code directly points to its corresponding execution code. This means that when an opcode is executed, it jumps directly to the code that implements that operation. In this program, variable IP (Instrcution pointer) indicates the offset of instruction table, then the virtual machine fetches the real address of instruction by adding the base address and offset so that execute it.
 
 The example of instruction Table:
 ``` Forth
@@ -55,76 +55,179 @@ The example of instruction Table:
 
 Example of terminal instrution
 ``` Forth
-: func_94601359250096 ( -- )
-    120 extend-char
-    109 extend-char
-    112 extend-char
+: func_5536499168 ( -- )
+    99 extend-char
     ip @ 1 cells + ip ! \ increment the instruction pointer
-    instructions ip @ @ cells + @ execute ;
+    ; 
 ```
 
 Example of non-terminal instrution
 ``` Forth
+create func_5536498544_op0 2 cells allot
+3 func_5536498544_op0 0 cells + !
+0 func_5536498544_op0 1 cells + !
 
-create func_94601359144576_op0 2 cells allot
-500 func_94601359144576_op0 0 cells + !
-0 func_94601359144576_op0 1 cells + !
-
-create func_94601359144576_op1 2 cells allot
-501 func_94601359144576_op1 0 cells + !
-0 func_94601359144576_op1 1 cells + !
-
-: func_94601359144576 ( -- )
+: func_5536498544 ( -- )
     getdepth  maxdepth @ > if
+        97 extend-char
+        98 extend-char
+        99 extend-char
          ip @ 1 cells + ip ! \ increment the instruction pointer
-         instructions ip @ @ cells + @ execute 
     else
         ip @ 
         rsp @ ! \ push the return address to the return stack 
         rsp @ 1 cells + rsp !  \ increment the return stack pointer 
-        2 random
+        1 random
         case
             0 of
-                func_94601359144576_op0 ip ! endof
-            1 of
-                func_94601359144576_op1 ip ! endof
+                func_5536498544_op0 ip ! endof
         endcase
-        instructions ip @ @ cells + @ execute 
     endif ; 
 ```
 
 Example of production rule
 ``` Forth
-create exp_94601359220720 3 cells allot
-95 exp_94601359220720 0 cells + !
-94 exp_94601359220720 1 cells + !
-0 exp_94601359220720 2 cells + !
-: func_94601359220720 ( -- )
+: func_4947206080 ( -- )
     getdepth  maxdepth @ > if
-        60 extend-char 
-        104 extend-char 
-        114 extend-char 
-        62 extend-char 
+        97 extend-char 
+        98 extend-char 
+        99 extend-char 
     ip @ 1 cells + ip ! \ increment the instruction pointer
-    instructions ip @ @ cells + @ execute 
     else
     ip @ 
     rsp @ ! \ push the return address to the return stack 
     rsp @ 1 cells + rsp !  \ increment the return stack pointer 
-    exp_94601359220720 ip !
-    instructions ip @ @ cells + @ execute 
+    exp_4947206080 ip !
     endif ; 
 ```
 
-The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Direct Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
+Main loop
+```Forth
+: mainloop
+    1 running !
+    0 buffer-pos !
+    begin
+        running @
+    while
+        instructions ip @ @ cells + @ execute
+    repeat
+;
+```
+The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Indirect Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
+
+**Risk:** This method may impacted by the word 'execute' which used to jump to a specific address, in some Foth systems 'Address execute' are also been taken as function calls that brings extra time consumption 
 
 ### Direct Threading Model
 
-Deleted the instruction table, and embeded the operation code into the program. 
+Addresses in the thread are the addresses of machine language. This form is simple, but may have overheads because the thread consists only of machine addresses, so all further parameters must be loaded indirectly from memory. In this project, variable IP(instruction pointer) indicates the address of instruction directly. 
+
+Example of terminal instrution
+``` Forth
+: func_4947206464 ( -- )
+    99 extend-char
+    ip @ 1 cells + ip ! \ increment the instruction pointer
+    ; 
+```
+
+Example of non-terminal instrution
+``` Forth
+: func_4947205872 ( -- )
+    getdepth  maxdepth @ > if
+        97 extend-char
+        98 extend-char
+        99 extend-char
+         ip @ 1 cells + ip ! \ increment the instruction pointer
+    else
+        ip @ 
+        rsp @ ! \ push the return address to the return stack 
+        rsp @ 1 cells + rsp !  \ increment the return stack pointer 
+        1 random
+        case
+            0 of
+                func_4947205872_op0 ip ! endof
+        endcase
+    endif ; 
+```
+
+Example of production rule
+``` Forth
+: func_4947206080 ( -- )
+    getdepth  maxdepth @ > if
+        97 extend-char 
+        98 extend-char 
+        99 extend-char 
+    ip @ 1 cells + ip ! \ increment the instruction pointer
+    else
+    ip @ 
+    rsp @ ! \ push the return address to the return stack 
+    rsp @ 1 cells + rsp !  \ increment the return stack pointer 
+    exp_4947206080 ip !
+    endif ; 
+```
+
+Main loop
+```Forth
+: mainloop
+    1 running !
+    0 buffer-pos !
+    begin
+        running @
+    while
+        ip @  @ execute
+    repeat
+;
+```
+The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Indirect Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
+
+**Risk:** This method may impacted by the word 'execute' which used to jump to a specific address, in some Foth systems 'Address execute' are also been taken as function calls that brings extra time consumption; Accessing variable IP ifself may also cost time.
+
+### Subroutine Threading Model
+
+So-called "subroutine-threaded code" (also "call-threaded code") consists of a series of machine-language "call" instructions (or addresses of functions to "call", as opposed to direct threading's use of "jump").
+
+Example of terminal instrution
+``` Forth
+: func_4923088224 ( dp -- ) { dp }
+    99 extend-char
+    ; 
+```
+
+Example of non-terminal instrution
+``` Forth
+: func_4923087632 ( dp -- ) { dp }
+    dp maxdepth @ > if
+        97 extend-char
+        98 extend-char
+        99 extend-char
+    else
+        1 random
+        case
+            0 of
+                dp 1 + func_4923087840 endof
+        endcase
+    endif ; 
+
+```
+
+Example of production rule
+``` Forth
+: func_4923087840 ( dp -- ) { dp }
+    dp maxdepth @ > if
+        97 extend-char 
+        98 extend-char 
+        99 extend-char 
+    else
+    dp 1 + func_4923087968
+    dp 1 + func_4923088096
+    dp 1 + func_4923088224
+    endif ; 
+```
+
+**Risk:** Please note that the 'defer' keyword is used in this project (used to reserve a keyword in advance, to be implemented later). This keyword may be implemented and optimized differently on various Forth platforms, which can lead to additional overhead when using it.
 
 How to use
 ```
-$ clang++ -std=c++20 -stdlib=libc++ IDT_generator.cpp -o generator
+$ clang++ -std=c++20 -stdlib=libc++ [IDT_generator.cpp | DT_generator.cpp | subroutine_generator.cpp ] -o generator
 ./generator -path <grammar.json> -depth <depth of recursion> -o <output forth file> [--show(enable enable benchmark)]
 ```
 C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.
