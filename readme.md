@@ -17,7 +17,7 @@ There are five different types of instructions supported by the virtual machine.
 
 ### Indirect Threading Model
 
-In the direct threading model, each operation code directly points to its corresponding execution code. This means that when an opcode is executed, it jumps directly to the code that implements that operation. In this program, variable IP (Instrcution pointer) indicates the offset of instruction table, then the virtual machine fetches the real address of instruction by adding the base address and offset so that execute it.
+In the indirect threading model, each operation code directly points to its corresponding execution code. This means that when an opcode is executed, it jumps directly to the code that implements that operation. In this program, variable IP (Instrcution pointer) indicates the offset of instruction table, then the virtual machine fetches the real address of instruction by adding the base address and offset so that execute it.
 
 The example of instruction Table:
 ``` Forth
