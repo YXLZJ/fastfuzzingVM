@@ -240,15 +240,15 @@ variable sum    \ Accumulates the sum of values for throughput calculation
     utime start !  \ Record the start time in microseconds
     0 
     begin  \ Start an infinite loop
-        dup 0xfff and 0 = if  \ Every 4096 iterations, execute the following block
+        dup 0xffff and 0 = if  \ Every 4096 iterations, execute the following block
             utime start @ -  \ Calculate elapsed time in microseconds
             #1000000 um/mod nip s>f \ Convert microseconds to seconds as floating-point
             sum @ s>f  \ Convert 'sum' from integer to floating-point
             \ Check FStack before division to ensure two numbers are present
             fdepth 2 >= if
                 f/  \ Calculate bytes/sec rate
-                1024e f/ 1024e f/  \ Convert to MB/s
-                f. ." MB/s" cr  \ Display throughput rate
+                1024e f/  \ Convert to KB/s
+                f. ." KB/s" cr  \ Display throughput rate
             else
                 ." FStack underflow error during division" cr
             then
