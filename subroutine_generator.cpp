@@ -80,7 +80,6 @@ public:
 
     void JIT(string file, bool show)
     {
-        cout<<this->nodes.size() <<" "<< this->reverse_nodes.size()<<endl;
         string code = R"(include random.fs
 
 create instructions 1000 cells allot 
@@ -176,8 +175,7 @@ variable maxdepth \ the maximum depth of the stack
         string init_function= "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
                 string entry = format(R"(: exe ( -- )
     {} 0 do
-        {}
-        mainloop
+        {} cr
     loop ; 
 exe)",count,init_function);
         code += entry;

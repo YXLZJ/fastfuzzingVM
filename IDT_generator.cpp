@@ -206,6 +206,7 @@ exe)";
     {} 0 do
         init-program ip !  \ Get the initial address of the program
         mainloop
+        cr
     loop ; 
 exe)",count);
         code += entry;
