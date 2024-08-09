@@ -228,6 +228,6 @@ Example of production rule
 How to use
 ```
 $ clang++ -std=c++20 -stdlib=libc++ [IDT_generator.cpp | DT_generator.cpp | subroutine_generator.cpp ] -o generator
-./generator -path <grammar.json> -depth <depth of recursion> -o <output forth file> [--show(enable enable benchmark)]
+./generator -d <number> -p <path> -o <output file> -c <count of loops>
 ```
 C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.

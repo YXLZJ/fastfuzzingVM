@@ -82,8 +82,6 @@ public:
     {
         cout<<this->nodes.size() <<" "<< this->reverse_nodes.size()<<endl;
         string code = R"(include random.fs
-variable buffer-pos
-create string-buffers 1024 1024 * chars allot
 
 create instructions 1000 cells allot 
 
@@ -101,33 +99,6 @@ create rstack \ Return stack for keeping return addresses
 rstack rsp !
 
 variable program \ the pointer to indicate the current program
-
-: PRINT ( n -- )
-  dup . ;
-
-: add-string ( addr len -- )
-    buffer-pos @
-    over string-buffers + swap move
-    buffer-pos @ + buffer-pos !
-;
-
-: print-strings ( -- )
-    0 buffer-pos @ do
-        i string-buffers + i cells + @ PRINT
-    loop
-    buffer-pos @ 0 buffer-pos ! ;
-
-: extend { addr-from u }
-    addr-from string-buffers buffer-pos @ chars + u move
-    buffer-pos @ u  + buffer-pos ! ;
-
-: extend-char ( n -- )
-    buffer-pos @ string-buffers chars + !
-    buffer-pos @ 1 + buffer-pos ! ;
-
-: output ( -- )
-    string-buffers buffer-pos @ type cr
-    0 buffer-pos ! ;
 
 : getdepth ( -- )
     rsp @ rstack - 1 cells / ;
@@ -158,7 +129,7 @@ variable maxdepth \ the maximum depth of the stack
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
                 for (auto c : x->name)
                 {
-                    code += "    " + to_string((unsigned)c) + " extend-char\n";
+                    code += "    " + to_string((unsigned)c) + " emit\n";
                 }
                 code += "    ; \n\n";
                 code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
@@ -169,7 +140,7 @@ variable maxdepth \ the maximum depth of the stack
                 code += "    dp maxdepth @ > if\n";
                 for (auto c : shortcut[x])
                 {
-                    code += "        " + to_string((unsigned)c) + " extend-char\n";
+                    code += "        " + to_string((unsigned)c) + " emit\n";
                 }
                 code += "    else\n";
                 code += "        " + to_string(x->subnode.size()) + " random\n";
@@ -189,7 +160,7 @@ variable maxdepth \ the maximum depth of the stack
                 code += "    dp maxdepth @ > if\n";
                 for (auto c : shortcut[x])
                 {
-                    code += "        " + to_string((unsigned)c) + " extend-char \n";
+                    code += "        " + to_string((unsigned)c) + " emit \n";
                 }
                 code += "    else\n";
                 for(auto s :x->subnode)
@@ -202,47 +173,14 @@ variable maxdepth \ the maximum depth of the stack
         }
         code += "( ------------------------------------------------- )\n\n";
 
-        string entry_benchmark_off = ": exe  \n";
-        entry_benchmark_off += "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
-        entry_benchmark_off += "    output ; \n ";
-        entry_benchmark_off += "exe\n";
-        string entry_benchmark_on = R"(variable start  \ Stores the start time for performance measurement
-variable sum    \ Accumulates the sum of values for throughput calculation
-0 sum ! 
-: exe 
-    utime start !  \ Record the start time in microseconds
-    0 
-    begin  \ Start an infinite loop
-        dup 0xffff and 0 = if  \ Every 4096 iterations, execute the following block
-            utime start @ -  \ Calculate elapsed time in microseconds
-            #1000000 um/mod nip s>f \ Convert microseconds to seconds as floating-point
-            sum @ s>f  \ Convert 'sum' from integer to floating-point
-            \ Check FStack before division to ensure two numbers are present
-            fdepth 2 >= if
-                f/  \ Calculate bytes/sec rate
-                1024e f/  \ Convert to KB/s
-                f. ." KB/s" cr  \ Display throughput rate
-            else
-                ." FStack underflow error during division" cr
-            then
-            utime start !  \ Update start time to current time
-            0 sum !  \ Reset sum to zero
-        then
-)";
-        entry_benchmark_on += "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
-        entry_benchmark_on += R"(sum @ buffer-pos @ + sum !
-        0 buffer-pos !
-        1+  \ Increment the loop counter
-    again ;  \ Continue looping indefinitely
-exe)";
-        if (show)
-        {
-            code += entry_benchmark_on;
-        }
-        else
-        {
-            code += entry_benchmark_off;
-        }
+        string init_function= "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
+                string entry = format(R"(: exe ( -- )
+    {} 0 do
+        {}
+        mainloop
+    loop ; 
+exe)",count,init_function);
+        code += entry;
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
         ofs << code;
         ofs.close();
@@ -359,17 +297,18 @@ private:
 int main(int argc, char *argv[])
 {
     unsigned depth = 0;
+    int count = 1;
     std::string path;
     std::string outputFile;
     bool show = false;
     for (int i = 1; i < argc; i++)
     {
         std::string arg = argv[i];
-        if (arg == "-depth" && i + 1 < argc)
+        if (arg == "-d" && i + 1 < argc)
         {
             depth = static_cast<unsigned int>(std::atoi(argv[++i]));
         }
-        else if (arg == "-path" && i + 1 < argc)
+        else if (arg == "-p" && i + 1 < argc)
         {
             path = argv[++i];
         }
@@ -377,23 +316,24 @@ int main(int argc, char *argv[])
         {
             outputFile = argv[++i];
         }
-        else if (arg == "--show")
-        {
-            show = true;
+        else if(arg == "-c" && i + 1 < argc) {
+            count = std::atoi(argv[++i]);
+        }
+        else if(arg == "--help") {
+            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+            return 1;
         }
     }
 
     if (depth == 0 || path.empty() || outputFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " -depth <number> -path <path> -o <output file> [--show]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
         return 1;
     }
 
     std::ifstream f(path);
     json content = json::parse(f);
     Grammar gram = Grammar(content, depth);
-    gram.JIT(outputFile, show);
-    string compile = "gforth " + outputFile;
-    system(compile.c_str());
+    gram.JIT(outputFile, count);
     return 0;
 }
