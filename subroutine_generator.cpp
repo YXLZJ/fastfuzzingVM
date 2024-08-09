@@ -78,7 +78,7 @@ public:
         this->getshortcut();
     }
 
-    void JIT(string file, bool show)
+    void JIT(string file, int count)
     {
         string code = R"(include random.fs
 
