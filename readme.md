@@ -233,6 +233,7 @@ $ clang++ -std=c++20 -stdlib=libc++ [IDT_generator.cpp | DT_generator.cpp | subr
 C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.
 
 **Bechmark Result:** 
+
 ![](result/css.json_throughput.png)
 ![](result/html.json_throughput.png)
 ![](result/math.json_throughput.png)
