@@ -116,10 +116,10 @@ variable maxdepth \ the maximum depth of the stack
 )";
         code += to_string(this->maxdepth) + " maxdepth !\n"; // set the maxdepth
         // create function signature, please it my introduce extra complexity
-        for(auto x : nodes)
+        for (auto x : nodes)
         {
             code += "defer func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
-        } 
+        }
         for (auto x : nodes)
         {
             code += "( ------------------------------------------------- )\n\n";
@@ -162,9 +162,9 @@ variable maxdepth \ the maximum depth of the stack
                     code += "        " + to_string((unsigned)c) + " emit \n";
                 }
                 code += "    else\n";
-                for(auto s :x->subnode)
+                for (auto s : x->subnode)
                 {
-                    code += "    dp 1 + func_" + to_string(reinterpret_cast<uintptr_t>(s))+"\n";
+                    code += "    dp 1 + func_" + to_string(reinterpret_cast<uintptr_t>(s)) + "\n";
                 }
                 code += "    endif ; \n\n";
                 code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
@@ -172,12 +172,26 @@ variable maxdepth \ the maximum depth of the stack
         }
         code += "( ------------------------------------------------- )\n\n";
 
-        string init_function= "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) +"\n";
-                string entry = format(R"(: exe ( -- )
+        string init_function = "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + "\n";
+        string entry = "";
+        if (count == -1)
+        {
+            entry = format(R"(: exe ( -- )
+    begin
+        {} cr
+    again ; 
+    exe)",
+                           init_function);
+        }
+        else
+        {
+            entry = format(R"(: exe ( -- )
     {} 0 do
         {} cr
     loop ; 
-exe)",count,init_function);
+    exe)",
+                           count, init_function);
+        }
         code += entry;
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
         ofs << code;
@@ -212,7 +226,7 @@ private:
     // reuse this fucntion to get the sequence of function
     void getshortcut()
     {
-        //initailize all the termianlal nodes as approchable
+        // initailize all the termianlal nodes as approchable
         for (auto &i : nodes)
         {
             if (i->tp == Type::terminal)
@@ -270,7 +284,7 @@ private:
             }
         }
     }
-    // // BFS to get the level-orderd sequence of nodes and reverse it 
+    // // BFS to get the level-orderd sequence of nodes and reverse it
     // void getReversedNodes() {
     //     queue<Node *> q;
     //     set <Node *> visited;
@@ -314,18 +328,24 @@ int main(int argc, char *argv[])
         {
             outputFile = argv[++i];
         }
-        else if(arg == "-c" && i + 1 < argc) {
+        else if (arg == "-c" && i + 1 < argc)
+        {
             count = std::atoi(argv[++i]);
         }
-        else if(arg == "--help") {
-            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+        else if (arg == "--endless")
+        {
+            count = -1;
+        }
+        else if (arg == "--help")
+        {
+            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]" << std::endl;
             return 1;
         }
     }
 
     if (depth == 0 || path.empty() || outputFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]" << std::endl;
         return 1;
     }
 

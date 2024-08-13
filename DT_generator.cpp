@@ -119,53 +119,68 @@ variable program \ the pointer to indicate the current program
 
 variable maxdepth \ the maximum depth of the stack
 )";
-        map<Node*,int> instruction_table; // the address of the instruction in the instruction table for direct threading model
+        map<Node *, int> instruction_table;                    // the address of the instruction in the instruction table for direct threading model
         code += to_string(this->maxdepth) + " maxdepth !\n\n"; // set the maxdepth
-        for(auto x: this->nodes) {
-            if(x->tp == Type :: non_terminal) {
-                for(int i = 0; i<x->subnode.size(); i++){
+        for (auto x : this->nodes)
+        {
+            if (x->tp == Type ::non_terminal)
+            {
+                for (int i = 0; i < x->subnode.size(); i++)
+                {
                     code += "create func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 2 cells allot\n";
                 }
-            } else if(x->tp == Type :: expression ) {
-                code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " +to_string(x->subnode.size()+1) + " cells allot\n";
+            }
+            else if (x->tp == Type ::expression)
+            {
+                code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size() + 1) + " cells allot\n";
             }
         }
 
-        for(auto x: this->nodes) {
+        for (auto x : this->nodes)
+        {
             code += "( ------------------------------------------------- )\n\n";
-            if(x->tp == Type::terminal ){
+            if (x->tp == Type::terminal)
+            {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                for(auto c: x->name){
+                for (auto c : x->name)
+                {
                     code += "    " + to_string((unsigned)c) + " emit\n";
                 }
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    ; \n\n";
-            } else if (x->tp == Type::non_terminal) {
+            }
+            else if (x->tp == Type::non_terminal)
+            {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
                 code += "    getdepth  maxdepth @ > if\n";
-                for(auto c: shortcut[x]){
+                for (auto c : shortcut[x])
+                {
                     code += "        " + to_string((unsigned)c) + " emit\n";
                 }
-                code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
+                code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    else\n";
                 code += "        ip @ \n";
                 code += "        rsp @ ! \\ push the return address to the return stack \n";
                 code += "        rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "        " + to_string(x->subnode.size()) + " random\n";
                 code += "        case\n";
-                for(int i=0;i<x->subnode.size();i++){
+                for (int i = 0; i < x->subnode.size(); i++)
+                {
                     code += "            " + to_string(i) + " of\n";
                     code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
                 }
                 code += "        endcase\n";
                 code += "    endif ; \n\n";
-            } else {
+            }
+            else
+            {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
                 code += "    getdepth  maxdepth @ > if\n";
-                for(auto c: shortcut[x]){
+                for (auto c : shortcut[x])
+                {
                     code += "        " + to_string((unsigned)c) + " emit \n";
                 }
-                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n"; 
+                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    else\n";
                 code += "    ip @ \n";
                 code += "    rsp @ ! \\ push the return address to the return stack \n";
@@ -175,22 +190,28 @@ variable maxdepth \ the maximum depth of the stack
             }
         }
 
-        for(auto x: this->nodes) {
-            if(x->tp == Type :: non_terminal) {
-                for(int i=0;i<x->subnode.size();i++){
-                    code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i]))  + " func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 0 cells + !\n";
-                    code +=  "\' RET func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 1 cells + !\n\n";
+        for (auto x : this->nodes)
+        {
+            if (x->tp == Type ::non_terminal)
+            {
+                for (int i = 0; i < x->subnode.size(); i++)
+                {
+                    code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + " func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 0 cells + !\n";
+                    code += "\' RET func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 1 cells + !\n\n";
                 }
-            } else if(x->tp == Type :: expression ) {
-                for(int i=0;i<x->subnode.size();i++){
+            }
+            else if (x->tp == Type ::expression)
+            {
+                for (int i = 0; i < x->subnode.size(); i++)
+                {
                     code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + " exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(i) + " cells + !\n";
                 }
-                code  += "\' RET exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size()) + " cells + !\n";
+                code += "\' RET exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size()) + " cells + !\n";
             }
         }
-        
+
         code += "create init-program 2 cells allot \n";
-        code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(this->start))+ " init-program 0 cells + ! \n";
+        code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + " init-program 0 cells + ! \n";
         code += "\' HALT init-program 1 cells + ! \n";
 
         code += R"(: mainloop
@@ -202,14 +223,29 @@ variable maxdepth \ the maximum depth of the stack
     repeat
 ;
 )";
-
-        string entry = format(R"(: exe ( -- )
+        string entry = "";
+        if (count == -1)
+        {
+            entry = format(R"(: exe ( -- )
+    begin
+        init-program ip !  \ Get the initial address of the program
+        mainloop
+        cr
+    again ; 
+exe)",
+                           count);
+        }
+        else
+        {
+            entry = format(R"(: exe ( -- )
     {} 0 do
         init-program ip !  \ Get the initial address of the program
         mainloop
         cr
     loop ; 
-exe)",count);
+exe)",
+                           count);
+        }
         code += entry;
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
         ofs << code;
@@ -324,10 +360,16 @@ int main(int argc, char *argv[])
         {
             outputFile = argv[++i];
         }
-        else if(arg == "-c" && i + 1 < argc) {
+        else if (arg == "-c" && i + 1 < argc)
+        {
             count = std::atoi(argv[++i]);
         }
-        else if(arg == "--help") {
+        else if (arg == "--endless")
+        {
+            count = -1;
+        }
+        else if (arg == "--help")
+        {
             std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
             return 1;
         }
@@ -335,7 +377,7 @@ int main(int argc, char *argv[])
 
     if (depth == 0 || path.empty() || outputFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]" << std::endl;
         return 1;
     }
 
