@@ -207,7 +207,7 @@ variable maxdepth \ the maximum depth of the stack
     begin
         running @
     while
-        instructions ip @ @ cells + @ execute
+        instructions ip @ @ cells + perform
     repeat
 ;
 )";

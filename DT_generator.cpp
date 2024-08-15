@@ -219,7 +219,7 @@ variable maxdepth \ the maximum depth of the stack
     begin
         running @
     while
-        ip @  @ execute
+        ip @  perform
     repeat
 ;
 )";
