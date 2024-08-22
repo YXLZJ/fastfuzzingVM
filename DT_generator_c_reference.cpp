@@ -84,9 +84,27 @@ public:
 #include <time.h>
 #include <string.h>
 
+#define BUFFER_SIZE 512*1024*1024   // buffer for storing text
 )";
         code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
-        code += R"(
+        code += R"(typedef struct {
+    char data[BUFFER_SIZE];
+    unsigned top;
+} Buffer;
+
+Buffer buffer;  // Declare a global buffer
+
+#define extend(c) { \
+    if (buffer.top < BUFFER_SIZE) { \
+        buffer.data[buffer.top++] = c; \
+    } \
+}
+
+
+#define clean() { \
+    buffer.top = 0; \
+}
+
 unsigned seed;  // Random seed
 unsigned branch;  // To hold branch value
 void (**PC)(void); //program counter;
@@ -155,9 +173,12 @@ void LOOP();
 }
 
 void HALT() {
+    printf("%.*s\n", (int)buffer.top, buffer.data);
+    fflush(stdout);
+    clean();
     jmp_loop();
-
 }
+
 )";
         // Add programs
         string init_program_name;
@@ -186,7 +207,7 @@ void HALT() {
                 code += "    if(stack.top==stack.frames+MAX_DEPTH){\n";
                 for (int j = 0; j < this->shortcut[x].size(); j++)
                 {
-                    code += "        putchar(" + to_string((unsigned)shortcut[x][j]) + ");\n";
+                    code += "        extend(" + to_string((unsigned)shortcut[x][j]) + ");\n";
                 }
                 code += "        PC++;\n";
                 code += "        Next();\n";
@@ -206,7 +227,7 @@ void HALT() {
                 code += "    if(stack.top==stack.frames+MAX_DEPTH){\n";
                 for (int j = 0; j < this->shortcut[x].size(); j++)
                 {
-                    code += "        putchar(" + to_string((unsigned)shortcut[x][j]) + ");\n";
+                    code += "        extend(" + to_string((unsigned)shortcut[x][j]) + ");\n";
                 }
                 code += "        PC++;\n";
                 code += "        Next();\n";
@@ -217,7 +238,7 @@ void HALT() {
             } else if(x->tp == Type::terminal){
                 for (int j = 0; j < x->name.size(); j++)
                 {
-                    code += "    putchar(" + to_string((unsigned)x->name[j]) + ");\n";
+                    code += "    extend(" + to_string((unsigned)x->name[j]) + ");\n";
                 }
                 code += "    PC++;\n";
                 code += "    Next();\n";
