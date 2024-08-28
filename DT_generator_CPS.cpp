@@ -78,7 +78,23 @@ public:
 
     void JIT(string file, int count)
     {
-        string code = R"(include random.fs
+        string code = R"(variable xorshift-state
+
+: init-xorshift ( -- )
+    utime drop xorshift-state ! ;
+
+: next-xorshift ( -- u )
+    xorshift-state @
+    dup 13 lshift xor
+    dup 17 rshift xor
+    dup 5 lshift xor
+    dup xorshift-state ! ;
+
+
+: random ( n -- random )
+    next-xorshift swap mod ;
+
+init-xorshift
 
 create instructions 1000 cells allot 
 
