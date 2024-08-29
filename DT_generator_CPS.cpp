@@ -129,6 +129,7 @@ variable program \ the pointer to indicate the current program
     rsp @ 1 cells - rsp ! \ decrement the return stack pointer
     rsp @ @ ip ! \ pop the return address from the return stack 
     ip @ 1 cells + ip ! \ increment the instruction pointer
+    rdrop
     ip @ perform 
     ;
 
@@ -165,7 +166,7 @@ variable maxdepth \ the maximum depth of the stack
                     code += "    " + to_string((unsigned)c) + " emit\n";
                 }
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
-                code += "   rdrop\n";
+                code += "    rdrop\n";
                 code += "    ip @  perform ; \n\n";
             }
             else if (x->tp == Type::non_terminal)
