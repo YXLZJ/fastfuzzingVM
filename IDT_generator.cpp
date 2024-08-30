@@ -180,7 +180,7 @@ variable maxdepth \ the maximum depth of the stack
                     code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
                 }
                 code += "        endcase\n";
-                code += "    endif ; \n\n";
+                code += "    then ; \n\n";
             }
             else
             {
@@ -202,7 +202,7 @@ variable maxdepth \ the maximum depth of the stack
                 code += "    rsp @ ! \\ push the return address to the return stack \n";
                 code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
-                code += "    endif ; \n\n";
+                code += "    then ; \n\n";
             }
         }
         code += "( ------------------------------------------------- )\n\n";
@@ -223,7 +223,7 @@ variable maxdepth \ the maximum depth of the stack
     begin
         running @
     while
-        instructions ip @ @ cells + perform
+        instructions ip @ @ cells + @ @ execute
     repeat
 ;
 )";

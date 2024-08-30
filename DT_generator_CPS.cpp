@@ -130,7 +130,7 @@ variable program \ the pointer to indicate the current program
     rsp @ @ ip ! \ pop the return address from the return stack 
     ip @ 1 cells + ip ! \ increment the instruction pointer
     rdrop
-    ip @ perform 
+    ip @  @ execute
     ;
 
 ( ------------------------------------------------- )
@@ -167,7 +167,7 @@ variable maxdepth \ the maximum depth of the stack
                 }
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    rdrop\n";
-                code += "    ip @  perform ; \n\n";
+                code += "    ip @  @ execute ; \n\n";
             }
             else if (x->tp == Type::non_terminal)
             {
@@ -191,11 +191,11 @@ variable maxdepth \ the maximum depth of the stack
                     code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
                 }
                 code += "        endcase\n";
-                code += "    endif  \n";
+                code += "    then  \n";
                 if(x != this->start){
                     code += "    rdrop\n";
                 }
-                code += "   ip @  perform ; \n\n";
+                code += "   ip @  @ execute ; \n\n";
             }
             else
             {
@@ -212,9 +212,9 @@ variable maxdepth \ the maximum depth of the stack
                 code += "    rsp @ ! \\ push the return address to the return stack \n";
                 code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
-                code += "    endif \n";
+                code += "    then \n";
                 code += "    rdrop\n";
-                code += "    ip @  perform ; \n\n";
+                code += "    ip @  @ execute ; \n\n";
             }
         }
 
@@ -248,7 +248,7 @@ variable maxdepth \ the maximum depth of the stack
             entry = format(R"(: exe ( -- )
     begin
         init-program ip !  \ Get the initial address of the program
-        ip @ perform
+        ip @ @ execute
         cr
     again ; 
 exe)",
@@ -259,7 +259,7 @@ exe)",
             entry = format(R"(: exe ( -- )
     {} 0 do
         init-program ip !  \ Get the initial address of the program
-        ip @ perform
+        ip @ @ execute
         cr
     loop ; 
 exe)",

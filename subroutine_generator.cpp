@@ -166,7 +166,7 @@ variable maxdepth \ the maximum depth of the stack
                     code += "                dp 1 + func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + " endof\n";
                 }
                 code += "        endcase\n";
-                code += "    endif ; \n\n";
+                code += "    then ; \n\n";
                 code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
             }
             else
@@ -182,7 +182,7 @@ variable maxdepth \ the maximum depth of the stack
                 {
                     code += "    dp 1 + func_" + to_string(reinterpret_cast<uintptr_t>(s)) + "\n";
                 }
-                code += "    endif ; \n\n";
+                code += "    then ; \n\n";
                 code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
             }
         }
