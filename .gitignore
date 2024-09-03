@@ -5,3 +5,5 @@ IDT_generator
 DT_generator
 subroutine_generator
 temp
+.simp.c
+simp
