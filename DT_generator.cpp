@@ -80,7 +80,6 @@ public:
     {
         string code = R"(variable xorshift-state
 
-
 : init-xorshift ( -- )
     utime drop xorshift-state ! ;
 
@@ -91,14 +90,12 @@ public:
     dup 5 lshift xor
     dup xorshift-state ! ;
 
-
 : random ( n -- random )
     next-xorshift swap mod ;
 
 init-xorshift
 
 create instructions 1000 cells allot 
-
 
 variable running \ the status of the program 1-> running 0-> halt
 1 running !
@@ -108,12 +105,37 @@ variable ip \ init instruction pointer
 
 create rstack \ Return stack for keeping return addresses 
 )";
-        code += to_string(this->maxdepth) + " cells allot\n";
-        code += R"(variable rsp
+    code += to_string(this->maxdepth) + " cells allot\n";
+    code += R"(variable rsp
 rstack rsp !
 
 variable program \ the pointer to indicate the current program
 
+\ Buffer for output
+create output-buffer 536870912 chars allot  \ 1 million characters
+variable buffer-index
+0 buffer-index !
+
+: flush-buffer ( -- )
+    output-buffer buffer-index @ type
+    0 buffer-index ! ;
+
+: buffer-emit ( c -- )
+    buffer-index @ 999999 < if
+        output-buffer buffer-index @ + c!
+        1 buffer-index +!
+    else
+        \ Buffer is full, flush it
+        flush-buffer
+        output-buffer c!  \ Store the current character
+        1 buffer-index !
+    then ;
+
+: buffer-type ( addr u -- )
+    0 ?do
+        dup i + c@ buffer-emit
+    loop
+    drop ;
 
 : getdepth ( -- )
     rsp @ rstack - 1 cells / ;
@@ -121,12 +143,12 @@ variable program \ the pointer to indicate the current program
 ( ------------------------------------------------- )
 
 : HALT ( -- )
-    0 running ! ;
+    0 running ! 
+    flush-buffer ;
 
 ( ------------------------------------------------- )
 
 : RET ( -- )
-
     rsp @ 1 cells - rsp ! \ decrement the return stack pointer
     rsp @ @ ip ! \ pop the return address from the return stack 
     ip @ 1 cells + ip ! \ increment the instruction pointer
@@ -136,76 +158,70 @@ variable program \ the pointer to indicate the current program
 
 variable maxdepth \ the maximum depth of the stack
 )";
-        map<Node *, int> instruction_table;                    // the address of the instruction in the instruction table for direct threading model
-        code += to_string(this->maxdepth) + " maxdepth !\n\n"; // set the maxdepth
-        for (auto x : this->nodes)
+    map<Node *, int> instruction_table;
+    code += to_string(this->maxdepth) + " maxdepth !\n\n";
+    for (auto x : this->nodes)
+    {
+        if (x->tp == Type::non_terminal)
         {
-            if (x->tp == Type ::non_terminal)
+            for (int i = 0; i < x->subnode.size(); i++)
             {
-                for (int i = 0; i < x->subnode.size(); i++)
-                {
-                    code += "create func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 2 cells allot\n";
-                }
-            }
-            else if (x->tp == Type ::expression)
-            {
-                code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size() + 1) + " cells allot\n";
+                code += "create func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " 2 cells allot\n";
             }
         }
+        else if (x->tp == Type::expression)
+        {
+            code += "create exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size() + 1) + " cells allot\n";
+        }
+    }
 
-        for (auto x : this->nodes)
+    for (auto x : this->nodes)
+    {
+        code += "( ------------------------------------------------- )\n\n";
+        if (x->tp == Type::terminal)
         {
-            code += "( ------------------------------------------------- )\n\n";
-            if (x->tp == Type::terminal)
+            code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
+            for (auto c : x->name)
             {
-                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                for (auto c : x->name)
-                {
-                    code += "    " + to_string((unsigned)c) + " emit\n";
-                }
-                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
-                code += "    ; \n\n";
+                code += "    " + to_string((unsigned)c) + " buffer-emit\n";
             }
-            else if (x->tp == Type::non_terminal)
-            {
-                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                code += "    getdepth  maxdepth @ > if\n";
-                for (auto c : shortcut[x])
-                {
-                    code += "        " + to_string((unsigned)c) + " emit\n";
-                }
-                code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
-                code += "    else\n";
-                code += "        ip @ \n";
-                code += "        rsp @ ! \\ push the return address to the return stack \n";
-                code += "        rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
-                code += "        " + to_string(x->subnode.size()) + " random\n";
-                code += "        case\n";
-                for (int i = 0; i < x->subnode.size(); i++)
-                {
-                    code += "            " + to_string(i) + " of\n";
-                    code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
-                }
-                code += "        endcase\n";
-                code += "    then ; \n\n";
-            }
-            else
-            {
-                code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                code += "    getdepth  maxdepth @ > if\n";
-                for (auto c : shortcut[x])
-                {
-                    code += "        " + to_string((unsigned)c) + " emit \n";
-                }
-                code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
-                code += "    else\n";
-                code += "    ip @ \n";
-                code += "    rsp @ ! \\ push the return address to the return stack \n";
-                code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
-                code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
-                code += "    then ; \n\n";
-            }
+            code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
+            code += "    ; \n\n";
         }
+        else if (x->tp == Type::non_terminal)
+        {
+            code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
+            code += "    getdepth  maxdepth @ > if\n";
+            code += "        s\" " + string(shortcut[x]) + "\" buffer-type\n";
+            code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
+            code += "    else\n";
+            code += "        ip @ \n";
+            code += "        rsp @ ! \\ push the return address to the return stack \n";
+            code += "        rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
+            code += "        " + to_string(x->subnode.size()) + " random\n";
+            code += "        case\n";
+            for (int i = 0; i < x->subnode.size(); i++)
+            {
+                code += "            " + to_string(i) + " of\n";
+                code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
+            }
+            code += "        endcase\n";
+            code += "    then ; \n\n";
+        }
+        else
+        {
+            code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
+            code += "    getdepth  maxdepth @ > if\n";
+            code += "        s\" " + string(shortcut[x]) + "\" buffer-type\n";
+            code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
+            code += "    else\n";
+            code += "    ip @ \n";
+            code += "    rsp @ ! \\ push the return address to the return stack \n";
+            code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
+            code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
+            code += "    then ; \n\n";
+        }
+    }
 
         for (auto x : this->nodes)
         {

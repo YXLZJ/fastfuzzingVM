@@ -81,7 +81,6 @@ public:
     void JIT(string file, int count)
     {
         string code = R"(variable xorshift-state
-
 : init-xorshift ( -- )
     utime drop xorshift-state ! ;
 
@@ -92,14 +91,12 @@ public:
     dup 5 lshift xor
     dup xorshift-state ! ;
 
-
 : random ( n -- random )
     next-xorshift swap mod ;
 
 init-xorshift
 
 create instructions 1000 cells allot 
-
 
 variable running \ the status of the program 1-> running 0-> halt
 1 running !
@@ -115,23 +112,50 @@ rstack rsp !
 
 variable program \ the pointer to indicate the current program
 
+\ Buffer for output (512MB)
+create output-buffer 536870912 chars allot
+variable buffer-index
+0 buffer-index !
+
+: flush-buffer ( -- )
+    output-buffer buffer-index @ type
+    0 buffer-index ! ;
+
+: buffer-emit ( c -- )
+    buffer-index @ 536870911 < if
+        output-buffer buffer-index @ + c!
+        1 buffer-index +!
+    else
+        \ Buffer is full, flush it
+        flush-buffer
+        output-buffer c!  \ Store the current character
+        1 buffer-index !
+    then ;
+
+: buffer-type ( addr u -- )
+    0 ?do
+        dup i + c@ buffer-emit
+    loop
+    drop ;
+
 : getdepth ( -- )
     rsp @ rstack - 1 cells / ;
 
 ( ------------------------------------------------- )
 
-: HALT  ;
+: HALT
+    flush-buffer ;
 
 ( ------------------------------------------------- )
 
-: RET  ;
+: RET ;
 
 ( ------------------------------------------------- )
 
 variable maxdepth \ the maximum depth of the stack
 )";
         code += to_string(this->maxdepth) + " maxdepth !\n"; // set the maxdepth
-        // create function signature, please it my introduce extra complexity
+        // create function signature
         for (auto x : nodes)
         {
             code += "defer func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
@@ -142,10 +166,7 @@ variable maxdepth \ the maximum depth of the stack
             if (x->tp == Type::terminal)
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
-                for (auto c : x->name)
-                {
-                    code += "    " + to_string((unsigned)c) + " emit\n";
-                }
+                code += "    s\" " + x->name + "\" buffer-type\n";
                 code += "    ; \n\n";
                 code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl is func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "\n";
             }
@@ -153,10 +174,7 @@ variable maxdepth \ the maximum depth of the stack
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
                 code += "    dp maxdepth @ > if\n";
-                for (auto c : shortcut[x])
-                {
-                    code += "        " + to_string((unsigned)c) + " emit\n";
-                }
+                code += "        s\" " + string(shortcut[x]) + "\" buffer-type\n";
                 code += "    else\n";
                 code += "        " + to_string(x->subnode.size()) + " random\n";
                 code += "        case\n";
@@ -173,10 +191,7 @@ variable maxdepth \ the maximum depth of the stack
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_impl ( dp -- ) { dp }\n";
                 code += "    dp maxdepth @ > if\n";
-                for (auto c : shortcut[x])
-                {
-                    code += "        " + to_string((unsigned)c) + " emit \n";
-                }
+                code += "        s\" " + string(shortcut[x]) + "\" buffer-type\n";
                 code += "    else\n";
                 for (auto s : x->subnode)
                 {
@@ -188,25 +203,27 @@ variable maxdepth \ the maximum depth of the stack
         }
         code += "( ------------------------------------------------- )\n\n";
 
-        string init_function = "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + "\n";
+        string init_function = "    1 func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + "\n    flush-buffer\n";
         string entry = "";
         if (count == -1)
         {
             entry = format(R"(: exe ( -- )
     begin
-        {} cr
+        {}
+        cr
     again ; 
-    exe)",
-                           init_function);
+exe)",
+            init_function);
         }
         else
         {
             entry = format(R"(: exe ( -- )
     {} 0 do
-        {} cr
+        {}
+        cr
     loop ; 
-    exe)",
-                           count, init_function);
+exe)",
+            count, init_function);
         }
         code += entry;
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);

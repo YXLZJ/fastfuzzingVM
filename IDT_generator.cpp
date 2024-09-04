@@ -79,7 +79,6 @@ public:
     void JIT(string file, int count)
     {
         string code = R"(variable xorshift-state
-
 : init-xorshift ( -- )
     utime drop xorshift-state ! ;
 
@@ -90,14 +89,12 @@ public:
     dup 5 lshift xor
     dup xorshift-state ! ;
 
-
 : random ( n -- random )
     next-xorshift swap mod ;
 
 init-xorshift
 
 create instructions 1000 cells allot 
-
 
 variable running \ the status of the program 1-> running 0-> halt
 1 running !
@@ -107,11 +104,37 @@ variable ip \ init instruction pointer
 
 create rstack \ Return stack for keeping return addresses 
 )";
-        code += to_string(this->maxdepth) + " cells allot\n";
-        code += R"(variable rsp
+    code += to_string(this->maxdepth) + " cells allot\n";
+    code += R"(variable rsp
 rstack rsp !
 
 variable program \ the pointer to indicate the current program
+
+\ Buffer for output (512MB)
+create output-buffer 536870912 chars allot
+variable buffer-index
+0 buffer-index !
+
+: flush-buffer ( -- )
+    output-buffer buffer-index @ type
+    0 buffer-index ! ;
+
+: buffer-emit ( c -- )
+    buffer-index @ 536870911 < if
+        output-buffer buffer-index @ + c!
+        1 buffer-index +!
+    else
+        \ Buffer is full, flush it
+        flush-buffer
+        output-buffer c!  \ Store the current character
+        1 buffer-index !
+    then ;
+
+: buffer-type ( addr u -- )
+    0 ?do
+        dup i + c@ buffer-emit
+    loop
+    drop ;
 
 : getdepth ( -- )
     rsp @ rstack - 1 cells / ;
@@ -119,12 +142,12 @@ variable program \ the pointer to indicate the current program
 ( ------------------------------------------------- )
 
 : HALT ( -- )
-    0 running ! ;
+    0 running ! 
+    flush-buffer ;
 
 ( ------------------------------------------------- )
 
 : RET ( -- )
-
     rsp @ 1 cells - rsp ! \ decrement the return stack pointer
     rsp @ @ ip ! \ pop the return address from the return stack 
     ip @ 1 cells + ip ! \ increment the instruction pointer
@@ -137,7 +160,7 @@ variable maxdepth \ the maximum depth of the stack
         map<Node *, int> instruction_table; // the address of the instruction in the instruction table for direct threading model
         for (auto x : this->nodes)
         {
-            instruction_table[x] = instruction_table.size() + 2; // Assum RET and HALT are the first two instructions
+            instruction_table[x] = instruction_table.size() + 2; // Assume RET and HALT are the first two instructions
         }
         code += to_string(this->maxdepth) + " maxdepth !\n"; // set the maxdepth
         for (auto x : this->nodes)
@@ -146,10 +169,7 @@ variable maxdepth \ the maximum depth of the stack
             if (x->tp == Type::terminal)
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                for (auto c : x->name)
-                {
-                    code += "    " + to_string((unsigned)c) + " emit\n";
-                }
+                code += "    s\" " + x->name + "\" buffer-type\n";
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    ; \n\n";
             }
@@ -163,10 +183,7 @@ variable maxdepth \ the maximum depth of the stack
                 }
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
                 code += "    getdepth  maxdepth @ > if\n";
-                for (auto c : shortcut[x])
-                {
-                    code += "        " + to_string((unsigned)c) + " emit\n";
-                }
+                code += "        s\" " + string(shortcut[x]) + "\" buffer-type\n";
                 code += "         ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    else\n";
                 code += "        ip @ \n";
@@ -192,10 +209,7 @@ variable maxdepth \ the maximum depth of the stack
                 code += to_string(0) + " exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " " + to_string(x->subnode.size()) + " cells + !\n";
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
                 code += "    getdepth  maxdepth @ > if\n";
-                for (auto c : shortcut[x])
-                {
-                    code += "        " + to_string((unsigned)c) + " emit \n";
-                }
+                code += "        s\" " + string(shortcut[x]) + "\" buffer-type\n";
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
                 code += "    else\n";
                 code += "    ip @ \n";
@@ -213,9 +227,6 @@ variable maxdepth \ the maximum depth of the stack
             code += "' func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " instructions " + to_string(instruction_table[x]) + " cells + ! \n";
         }
         code += "create init-program 2 cells allot \n";
-        // for(auto i:instruction_table){
-        //     cout<<" "<<i.first->name<<" "<<i.second<<endl;
-        // }
         code += to_string(instruction_table[this->start]) + " init-program 0 cells + ! \n";
         code += "1 init-program 1 cells + ! \n";
         code += R"(: mainloop
@@ -225,19 +236,19 @@ variable maxdepth \ the maximum depth of the stack
     while
         instructions ip @ @ cells + @ execute
     repeat
-;
+    ;
 )";
         string entry = "";
         if (count == -1)
         {
-            entry = format(R"(: exe ( -- )
+            entry = R"(: exe ( -- )
     begin
         init-program ip !  \ Get the initial address of the program
         mainloop
+        flush-buffer
         cr
     again ; 
-exe)",
-                           count);
+exe)";
         }
         else
         {
@@ -245,10 +256,11 @@ exe)",
     {} 0 do
         init-program ip !  \ Get the initial address of the program
         mainloop
+        flush-buffer
         cr
     loop ; 
 exe)",
-                           count);
+                        count);
         }
         code += entry;
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
