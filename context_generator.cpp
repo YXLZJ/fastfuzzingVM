@@ -80,6 +80,7 @@ public:
     {
         string code = R"(variable xorshift-state
 
+
 : init-xorshift ( -- )
     utime drop xorshift-state ! ;
 
@@ -129,8 +130,6 @@ variable program \ the pointer to indicate the current program
     rsp @ 1 cells - rsp ! \ decrement the return stack pointer
     rsp @ @ ip ! \ pop the return address from the return stack 
     ip @ 1 cells + ip ! \ increment the instruction pointer
-    rdrop
-    ip @  @ execute
     ;
 
 ( ------------------------------------------------- )
@@ -160,19 +159,16 @@ variable maxdepth \ the maximum depth of the stack
             if (x->tp == Type::terminal)
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                // code += "rsp @ rstack - cell / . \n";
                 for (auto c : x->name)
                 {
                     code += "    " + to_string((unsigned)c) + " emit\n";
                 }
                 code += "    ip @ 1 cells + ip ! \\ increment the instruction pointer\n";
-                code += "    rdrop\n";
-                code += "    ip @  @ execute ; \n\n";
+                code += "    ; \n\n";
             }
             else if (x->tp == Type::non_terminal)
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                // code += "rsp @ rstack - cell / . \n";
                 code += "    getdepth  maxdepth @ > if\n";
                 for (auto c : shortcut[x])
                 {
@@ -191,16 +187,11 @@ variable maxdepth \ the maximum depth of the stack
                     code += "                func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + " ip ! endof\n";
                 }
                 code += "        endcase\n";
-                code += "    then  \n";
-                if(x != this->start){
-                    code += "    rdrop\n";
-                }
-                code += "   ip @  @ execute ; \n\n";
+                code += "    then ; \n\n";
             }
             else
             {
                 code += ": func_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ( -- )\n";
-                // code += "rsp @ rstack - cell / . \n";
                 code += "    getdepth  maxdepth @ > if\n";
                 for (auto c : shortcut[x])
                 {
@@ -212,9 +203,7 @@ variable maxdepth \ the maximum depth of the stack
                 code += "    rsp @ ! \\ push the return address to the return stack \n";
                 code += "    rsp @ 1 cells + rsp !  \\ increment the return stack pointer \n";
                 code += "    exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + " ip !\n";
-                code += "    then \n";
-                code += "    rdrop\n";
-                code += "    ip @  @ execute ; \n\n";
+                code += "    then ; \n\n";
             }
         }
 
@@ -242,13 +231,22 @@ variable maxdepth \ the maximum depth of the stack
         code += "\' func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + " init-program 0 cells + ! \n";
         code += "\' HALT init-program 1 cells + ! \n";
 
+        code += R"(: mainloop
+    1 running !
+    begin
+        running @
+    while
+        ip @  @ execute
+    repeat
+;
+)";
         string entry = "";
         if (count == -1)
         {
             entry = format(R"(: exe ( -- )
     begin
         init-program ip !  \ Get the initial address of the program
-        ip @ @ execute
+        mainloop
         cr
     again ; 
 exe)",
@@ -259,7 +257,7 @@ exe)",
             entry = format(R"(: exe ( -- )
     {} 0 do
         init-program ip !  \ Get the initial address of the program
-        ip @ @ execute
+        mainloop
         cr
     loop ; 
 exe)",

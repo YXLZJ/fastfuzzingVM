@@ -4,6 +4,11 @@ generator
 IDT_generator
 DT_generator
 subroutine_generator
+context_generator
+IDT_generator_c
+DT_generator_c
+subroutine_generator_c
+context_generator_c
 temp
 .simp.c
 simp
