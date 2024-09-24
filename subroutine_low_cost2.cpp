@@ -104,35 +104,35 @@ Buffer buffer;  // Declare a global buffer
     buffer.top = 0; \
 }
 
-// Remove depth variable, we will use x19 instead
+// Remove depth variable, we will use x1 instead
 // int depth = 0;
 
-// Initialize x19 to 0
+// Initialize x1 to 0
 #define INIT_DEPTH() \
     __asm__ volatile ( \
-        "mov x19, #0\n\t" \
+        "mov x1, #0\n\t" \
         : \
         : \
-        : "x19" \
+        : "x1" \
     )
 
-// Modify CALL macro to operate on x19
+// Modify CALL macro to operate on x1
 #define CALL(func) \
     __asm__ volatile (  \
-        "add x19, x19, #1\n\t"  /* depth++ */ \
+        "add x1, x1, #1\n\t"  /* depth++ */ \
         "bl _" #func "\n\t" \
         : \
         : \
-        : "x19", "x30", "memory" \
+        : "x1", "x30", "memory" \
     )
 
-// Modify RETURN macro to operate on x19
+// Modify RETURN macro to operate on x1
 #define RETURN() \
     __asm__ volatile ( \
-        "sub x19, x19, #1\n\t"  /* depth-- */ \
+        "sub x1, x1, #1\n\t"  /* depth-- */ \
         : \
         : \
-        : "x19" \
+        : "x1" \
     ); \
     return;
 
@@ -163,11 +163,11 @@ bool endless = false;
 
         // Use asm goto for depth check
         code += "    asm goto (\n";
-        code += "        \"cmp x19, #" + to_string(this->maxdepth) + "\\n\\t\"\n";
+        code += "        \"cmp x1, #" + to_string(this->maxdepth) + "\\n\\t\"\n";
         code += "        \"bgt %l[depth_exceeded]\\n\\t\"\n";
         code += "        :\n";
         code += "        :\n";
-        code += "        : \"x19\"\n";
+        code += "        : \"x1\"\n";
         code += "        : depth_exceeded\n";
         code += "    );\n";
 
@@ -212,7 +212,7 @@ bool endless = false;
     if(count == -1){
         code += "    endless = true;\n";
     }
-    // Initialize x19 in main
+    // Initialize x1 in main
     code += "    INIT_DEPTH();\n";
     code += "    while(endless || (count>0) ) {\n";
     code += "        CALL(func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + ");\n";

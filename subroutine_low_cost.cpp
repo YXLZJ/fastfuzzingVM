@@ -78,156 +78,132 @@ public:
     };
 
     void JIT(string file, int count)
-    {
-        string code = R"(#include <stdio.h>
-    #include <stdlib.h>
-    #include <time.h>
-    #include <string.h>
-    #include <stdbool.h>
-    #define BUFFER_SIZE (512*1024*1024)   // buffer for storing text
-    )";
-        code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
-        code += R"(typedef struct {
-        char data[BUFFER_SIZE];
-        unsigned top;
-    } Buffer;
+{
+    string code = R"(#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <stdbool.h>
+#define BUFFER_SIZE (512*1024*1024)   // buffer for storing text
+)";
+    code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
+    code += R"(typedef struct {
+    char data[BUFFER_SIZE];
+    unsigned top;
+} Buffer;
 
-    Buffer buffer;  // Declare a global buffer
+Buffer buffer;  // Declare a global buffer
 
-    #define extend(c) { \
-        if (buffer.top < BUFFER_SIZE) { \
-            buffer.data[buffer.top++] = c; \
-        } \
+#define extend(c) { \
+    if (buffer.top < BUFFER_SIZE) { \
+        buffer.data[buffer.top++] = c; \
+    } \
+}
+
+#define clean() { \
+    buffer.top = 0; \
+}
+
+int depth = 0;
+
+#define CALL(func) \
+    __asm__ volatile (  \
+        "mov x0, %0\n"   \
+        "ldr w1, [x0]\n"  \
+        "add w1, w1, #1\n"  \
+        "str w1, [x0]\n"\
+        "bl _" #func "\n"\
+        : \
+        : "r" (&depth) \
+        : "x0", "x1", "x30", "memory" \
+    )
+
+
+#define RETURN() \
+    __asm__ volatile ( \
+        "mov x0, %0\n"\
+        "ldr w1, [x0]\n"\
+        "sub w1, w1, #1\n"\
+        "str w1, [x0]\n"\
+        : \
+        : "r" (&depth) \
+        : "x0", "x1", "memory" \
+    ); \
+    return;
+
+unsigned seed;  // Random seed
+unsigned branch;  // To hold branch value
+
+typedef void (*Inst)();
+Inst *PC;
+
+// xor to get random number
+#define xor(l) \
+    seed ^= seed << 13; \
+    seed ^= seed >> 17; \
+    seed ^= seed << 5; \
+    branch = seed % l
+
+bool endless = false;
+
+)";
+
+    // Create the signature of the functions
+    for(auto &x : nodes){
+        code += "void func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "();\n";
     }
 
-    #define clean() { \
-        buffer.top = 0; \
-    }
-
-    // Remove depth variable, we will use x19 instead
-    // int depth = 0;
-
-    // Initialize x19 to 0
-    #define INIT_DEPTH() \
-        __asm__ volatile ( \
-            "mov x19, #0\n\t" \
-            : \
-            : \
-            : "x19" \
-        )
-
-    // Modify CALL macro to operate on x19
-    #define CALL(func) \
-        __asm__ volatile (  \
-            "add x19, x19, #1\n\t"  /* depth++ */ \
-            "bl _" #func "\n\t" \
-            : \
-            : \
-            : "x19", "x30", "memory" \
-        )
-
-    // Modify RETURN macro to operate on x19
-    #define RETURN() \
-        __asm__ volatile ( \
-            "sub x19, x19, #1\n\t"  /* depth-- */ \
-            : \
-            : \
-            : "x19" \
-        ); \
-        return;
-
-    unsigned seed;  // Random seed
-    unsigned branch;  // To hold branch value
-
-    typedef void (*Inst)();
-    Inst *PC;
-
-    // xor to get random number
-    #define xor(l) \
-        seed ^= seed << 13; \
-        seed ^= seed >> 17; \
-        seed ^= seed << 5; \
-        branch = seed % l
-
-    bool endless = false;
-
-    )";
-
-        // Create the signature of the functions
-        for(auto &x : nodes){
-            code += "void func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "();\n";
-        }
-
-        for(auto &x: nodes){
-            code += "void __attribute__((noinline)) func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "() {\n";
-
-            // Generate assembly code to compare x19 with MAX_DEPTH
-            code += "    __asm__ volatile (\n";
-            code += "        \"cmp x19, #" + to_string(MAX_DEPTH) + "\\n\\t\"\n";
-            code += "        \"bgt depth_exceeded_%=\\n\\t\"\n";
-            code += "        :\n";
-            code += "        :\n";
-            code += "        : \"x19\"\n";
-            code += "    );\n";
-
-            // Normal function code
-            if(x->tp == Type::non_terminal){
-                code += "    // Normal function code\n";
-                code += "    xor(" + to_string(x->subnode.size()) + ");\n";
-                code += "    switch (branch) {\n";
-                for(int j=0;j<x->subnode.size();j++){
-                    code += "        case " + to_string(j) + ":\n";
-                    code += "            CALL(func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[j])) + ");\n";
-                    code += "            break;\n";
-                }
-                code += "    }\n";
-            } else if(x->tp == Type::expression){
-                code += "    // Normal function code\n";
-                for(auto &k:x->subnode){
-                    code += "    CALL(func_" + to_string(reinterpret_cast<uintptr_t>(k)) + ");\n";
-                }
-            } else if(x->tp == Type::terminal){
-                for(int j=0;j<x->name.size();j++){
-                    code += "    extend(" + to_string((unsigned char)x->name[j]) + ");\n";
-                }
+    for(auto &x: nodes){
+        code += "void __attribute__((noinline)) func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "() {\n";
+        code += "    if(depth > MAX_DEPTH) {\n";
+        if(this->shortcut.count(x) && !this->shortcut[x].empty()){
+            for(int j=0;j<this->shortcut[x].size();j++){
+                code += "        extend(" + to_string((unsigned char)this->shortcut[x][j]) + ");\n";
             }
-
-            // Jump label for depth exceeded
-            code += "    __asm__ volatile (\"depth_exceeded_%=:\");\n";
-
-            // Handle depth exceeded case
-            code += "    // Handle depth exceeded\n";
-            if(this->shortcut.count(x) && !this->shortcut[x].empty()){
-                for(int j=0;j<this->shortcut[x].size();j++){
-                    code += "    extend(" + to_string((unsigned char)this->shortcut[x][j]) + ");\n";
-                }
-            }
-
-            code += "    RETURN();\n";
-            code += "}\n";
         }
-
-        code += "int main(void) {\n";
-        code += "    static unsigned count = " + to_string(count) + ";\n";
-        code += "    seed = time(NULL);\n";
-        if(count == -1){
-            code += "    endless = true;\n";
-        }
-        // Initialize x19 in main
-        code += "    INIT_DEPTH();\n";
-        code += "    while(endless || (count>0) ) {\n";
-        code += "        CALL(func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + ");\n";
-        code += "        count--;\n";
-        code += "        printf(\"%.*s\\n\", (int)buffer.top, buffer.data);\n";
-        code += "        clean();\n";
+        code += "        RETURN();\n";
         code += "    }\n";
-        code += "    return 0;\n";
+        if(x->tp == Type::non_terminal){
+            code += "    xor(" + to_string(x->subnode.size()) + ");\n";
+            code += "    switch (branch) {\n";
+            for(int j=0;j<x->subnode.size();j++){
+                code += "        case " + to_string(j) + ":\n";
+                code += "            CALL(func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[j])) + ");\n";
+                code += "            break;\n";
+            }
+            code += "    }\n";
+        } else if(x->tp == Type::expression){
+            for(auto &k:x->subnode){
+                code += "    CALL(func_" + to_string(reinterpret_cast<uintptr_t>(k)) + ");\n";
+            }
+        } else if(x->tp == Type::terminal){
+            for(int j=0;j<x->name.size();j++){
+                code += "    extend(" + to_string((unsigned char)x->name[j]) + ");\n";
+            }
+        }
+        code += "    RETURN();\n";
         code += "}\n";
-        std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
-        ofs << code;
-        ofs.close();
-        std::cout << "Code written to file successfully." << std::endl;
     }
+
+    code += "int main(void) {\n";
+    code += "    static unsigned count = " + to_string(count) + ";\n";
+    code += "    seed = time(NULL);\n";
+    if(count == -1){
+        code += "    endless = true;\n";
+    }
+    code += "    while(endless || (count>0) ) {\n";
+    code += "        CALL(func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + ");\n";
+    code += "        count--;\n";
+    code += "        printf(\"%.*s\\n\", (int)buffer.top, buffer.data);\n";
+    code += "        clean();\n";
+    code += "    }\n";
+    code += "    return 0;\n";
+    code += "}\n";
+    std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
+    ofs << code;
+    ofs.close();
+    std::cout << "Code written to file successfully." << std::endl;
+}
     
     private:
         vector<Node *> nodes;
