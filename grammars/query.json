@@ -1,0 +1,46 @@
+{
+    "<start>": [
+        ["<select_statement>"]
+    ],
+    "<select_statement>": [
+        ["SELECT", "<column_list>", "FROM", "<table>", "<where_clause>"]
+    ],
+    "<column_list>": [
+        ["*"],
+        ["<column>", ",", "<column_list>"]
+    ],
+    "<column>": [
+        ["id"],
+        ["name"],
+        ["age"],
+        ["email"]
+    ],
+    "<table>": [
+        ["users"],
+        ["orders"],
+        ["products"]
+    ],
+    "<where_clause>": [
+        ["WHERE", "<condition>"],
+        []
+    ],
+    "<condition>": [
+        ["<column>", "=", "<value>"],
+        ["<condition>", "AND", "<condition>"],
+        ["<condition>", "OR", "<condition>"]
+    ],
+    "<value>": [
+        ["<number>"],
+        ["'<string>'"]
+    ],
+    "<number>": [
+        ["<digit>"],
+        ["<digit>", "<number>"]
+    ],
+    "<digit>": [
+        ["0"], ["1"], ["2"], ["3"], ["4"], ["5"], ["6"], ["7"], ["8"], ["9"]
+    ],
+    "<string>": [
+        ["a"], ["b"], ["c"], ["d"], ["e"], ["f"], ["g"], ["h"], ["i"], ["j"]
+    ]
+}
