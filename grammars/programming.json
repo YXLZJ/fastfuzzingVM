@@ -1,0 +1,81 @@
+{
+    "<start>": [
+        ["<program>"]
+    ],
+    "<program>": [
+        ["<program>", "<statement>"],
+        ["<statement>"]
+    ],
+    "<statement>": [
+        ["<var_decl>"],
+        ["<assignment>"],
+        ["<if_stmt>"],
+        ["<while_stmt>"],
+        ["<function_decl>"],
+        ["<return_stmt>"]
+    ],
+    "<var_decl>": [
+        ["int ", "<identifier>", " ; "],
+        ["float ", "<identifier>", " ; "],
+        ["string ", "<identifier>", " ; "]
+    ],
+    "<assignment>": [
+        ["<identifier>", "=", "<expr>", ";"]
+    ],
+    "<if_stmt>": [
+        [" if ", "(", "<bool_expr>", ")", "{", "<program>", "}"]
+    ],
+    "<while_stmt>": [
+        [" while ", "(", "<bool_expr>", ")", "{", "<program>", "}"]
+    ],
+    "<function_decl>": [
+        ["function", "<identifier>", "(", ")", "{", "<program>", "}"]
+    ],
+    "<return_stmt>": [
+        [" return ", "<expr>", ";"]
+    ],
+    "<expr>": [
+        ["<expr>", "+", "<term>"],
+        ["<expr>", "-", "<term>"],
+        ["<term>"]
+    ],
+    "<term>": [
+        ["<term>", "*", "<factor>"],
+        ["<term>", "/", "<factor>"],
+        ["<factor>"]
+    ],
+    "<factor>": [
+        ["(", "<expr>", ")"],
+        ["<number>"],
+        ["<identifier>"]
+    ],
+    "<bool_expr>": [
+        ["<expr>", "==", "<expr>"],
+        ["<expr>", "!=", "<expr>"],
+        ["<expr>", ">", "<expr>"],
+        ["<expr>", "<", "<expr>"],
+        ["<bool_expr>", "AND", "<bool_expr>"],
+        ["<bool_expr>", "OR", "<bool_expr>"],
+        ["NOT", "<bool_expr>"]
+    ],
+    "<identifier>": [
+        ["<letter>", "<identifier>"],
+        ["<letter>"]
+    ],
+    "<letter>": [
+        ["a"], ["b"], ["c"], ["d"], ["e"], ["f"], ["g"], ["h"], ["i"], ["j"],
+        ["k"], ["l"], ["m"], ["n"], ["o"], ["p"], ["q"], ["r"], ["s"], ["t"],
+        ["u"], ["v"], ["w"], ["x"], ["y"], ["z"],
+        ["A"], ["B"], ["C"], ["D"], ["E"], ["F"], ["G"], ["H"], ["I"], ["J"],
+        ["K"], ["L"], ["M"], ["N"], ["O"], ["P"], ["Q"], ["R"], ["S"], ["T"],
+        ["U"], ["V"], ["W"], ["X"], ["Y"], ["Z"]
+    ],
+    "<number>": [
+        ["<digit>", "<number>"],
+        ["<digit>"]
+    ],
+    "<digit>": [
+        ["0"], ["1"], ["2"], ["3"], ["4"],
+        ["5"], ["6"], ["7"], ["8"], ["9"]
+    ]
+}

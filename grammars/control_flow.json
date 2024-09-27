@@ -1,0 +1,62 @@
+{
+    "<start>": [
+        ["<program>"]
+    ],
+    "<program>": [
+        ["<statement>", "<program>"],
+        []
+    ],
+    "<statement>": [
+        ["<if_statement>"],
+        ["<while_loop>"],
+        ["<for_loop>"],
+        ["<assignment>"],
+        ["<print>"]
+    ],
+    "<if_statement>": [
+        [" if ", "(", "<condition>", ")", "{", "<program>", "}"],
+        [" if ", "(", "<condition>", ")", "{", "<program>", "}", "else", "{", "<program>", "}"]
+    ],
+    "<while_loop>": [
+        [" while ", "(", "<condition>", ")", "{", "<program>", "}"]
+    ],
+    "<for_loop>": [
+        [" for ", "(", "<assignment>", ";", "<condition>", ";", "<assignment>", ")", "{", "<program>", "}"]
+    ],
+    "<assignment>": [
+        ["<identifier>", "=", "<expression>", ";"]
+    ],
+    "<print>": [
+        [" print ", "(", "<expression>", ")", ";"]
+    ],
+    "<condition>": [
+        ["<expression>", ">", "<expression>"],
+        ["<expression>", "<", "<expression>"],
+        ["<expression>", "==", "<expression>"]
+    ],
+    "<expression>": [
+        ["<expression>", "+", "<term>"],
+        ["<expression>", "-", "<term>"],
+        ["<term>"]
+    ],
+    "<term>": [
+        ["<term>", "*", "<factor>"],
+        ["<term>", "/", "<factor>"],
+        ["<factor>"]
+    ],
+    "<factor>": [
+        ["(", "<expression>", ")"],
+        ["<number>"],
+        ["<identifier>"]
+    ],
+    "<identifier>": [
+        ["i"], ["j"], ["k"], ["x"], ["y"], ["z"], ["a"], ["b"], ["c"]
+    ],
+    "<number>": [
+        ["<digit>"],
+        ["<digit>", "<number>"]
+    ],
+    "<digit>": [
+        ["0"], ["1"], ["2"], ["3"], ["4"], ["5"], ["6"], ["7"], ["8"], ["9"]
+    ]
+}
