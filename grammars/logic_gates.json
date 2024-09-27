@@ -1,0 +1,26 @@
+{
+    "<start>": [
+        ["<expression>"]
+    ],
+    "<expression>": [
+        ["<expression>", " AND ", "<term>"],
+        ["<expression>", " OR ", "<term>"],
+        ["<term>"]
+    ],
+    "<term>": [
+        [" NOT ", "<factor>"],
+        ["<factor>"]
+    ],
+    "<factor>": [
+        ["(", "<expression>", ")"],
+        ["<predicate>"]
+    ],
+    "<predicate>": [
+        ["true"],
+        ["false"],
+        ["<identifier>"]
+    ],
+    "<identifier>": [
+        ["A"], ["B"], ["C"], ["D"], ["E"], ["F"], ["G"], ["H"], ["I"], ["J"]
+    ]
+}

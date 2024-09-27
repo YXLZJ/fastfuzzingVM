@@ -1,0 +1,48 @@
+{
+    "<start>": [
+        ["<if_statement>"]
+    ],
+    "<if_statement>": [
+        ["if", "(", "<condition>", ")", "{", "<statements>", "}", "else", "{", "<statements>", "}"],
+        ["if", "(", "<condition>", ")", "{", "<statements>", "}"]
+    ],
+    "<statements>": [
+        ["<statement>", "<statements>"],
+        []
+    ],
+    "<statement>": [
+        ["<if_statement>"],
+        ["<assignment>"],
+        ["<print>"]
+    ],
+    "<assignment>": [
+        ["<identifier>", "=", "<expression>", ";"]
+    ],
+    "<print>": [
+        ["print", "(", "<expression>", ")", ";"]
+    ],
+    "<condition>": [
+        ["<expression>", ">", "<expression>"],
+        ["<expression>", "<", "<expression>"],
+        ["<expression>", "==", "<expression>"]
+    ],
+    "<expression>": [
+        ["<term>", "+", "<expression>"],
+        ["<term>"],
+        ["<term>", "-", "<expression>"]
+    ],
+    "<term>": [
+        ["<factor>"],
+        ["<factor>", "*", "<term>"]
+    ],
+    "<factor>": [
+        ["<number>"],
+        ["<identifier>"]
+    ],
+    "<identifier>": [
+        ["x"], ["y"], ["z"], ["a"], ["b"], ["c"]
+    ],
+    "<number>": [
+        ["0"], ["1"], ["2"], ["3"], ["4"], ["5"], ["6"], ["7"], ["8"], ["9"]
+    ]
+}
