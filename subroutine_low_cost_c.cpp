@@ -77,7 +77,7 @@ public:
         this->getshortcut();
     };
 
-    void JIT(string file, int count)
+void JIT(string file, int count)
 {
     string code = R"(#include <stdio.h>
 #include <stdlib.h>
@@ -104,30 +104,35 @@ Buffer buffer;  // Declare a global buffer
     buffer.top = 0; \
 }
 
-int depth = 0;
+// Remove depth variable, we will use x1 instead
+// int depth = 0;
 
-#define CALL(func) \
-    __asm__ volatile (  \
-        "mov x0, %0\n"   \
-        "ldr w1, [x0]\n"  \
-        "add w1, w1, #1\n"  \
-        "str w1, [x0]\n"\
-        "bl _" #func "\n"\
+// Initialize x1 to 0
+#define INIT_DEPTH() \
+    __asm__ volatile ( \
+        "mov x1, #0\n\t" \
         : \
-        : "r" (&depth) \
-        : "x0", "x1", "x30", "memory" \
+        : \
+        : "x1" \
     )
 
+// Modify CALL macro to operate on x1
+#define CALL(func) \
+    __asm__ volatile (  \
+        "add x1, x1, #1\n\t"  /* depth++ */ \
+        "bl _" #func "\n\t" \
+        : \
+        : \
+        : "x1", "x30", "memory" \
+    )
 
+// Modify RETURN macro to operate on x1
 #define RETURN() \
     __asm__ volatile ( \
-        "mov x0, %0\n"\
-        "ldr w1, [x0]\n"\
-        "sub w1, w1, #1\n"\
-        "str w1, [x0]\n"\
+        "sub x1, x1, #1\n\t"  /* depth-- */ \
         : \
-        : "r" (&depth) \
-        : "x0", "x1", "memory" \
+        : \
+        : "x1" \
     ); \
     return;
 
@@ -155,30 +160,58 @@ bool endless = false;
 
     for(auto &x: nodes){
         code += "void __attribute__((noinline)) func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "() {\n";
-        code += "    if(depth > MAX_DEPTH) {\n";
-        if(this->shortcut.count(x) && !this->shortcut[x].empty()){
-            for(int j=0;j<this->shortcut[x].size();j++){
-                code += "        extend(" + to_string((unsigned char)this->shortcut[x][j]) + ");\n";
-            }
-        }
-        code += "        RETURN();\n";
-        code += "    }\n";
+
+        // Use asm goto for depth check
+        code += "    asm goto (\n";
+        code += "        \"cmp x1, #" + to_string(this->maxdepth) + "\\n\\t\"\n";
+        code += "        \"bgt %l[depth_exceeded]\\n\\t\"\n";
+        code += "        :\n";
+        code += "        :\n";
+        code += "        : \"x1\"\n";
+        code += "        : depth_exceeded\n";
+        code += "    );\n";
+
+        // Normal function code
         if(x->tp == Type::non_terminal){
+            code += "    // Normal function code\n";
             code += "    xor(" + to_string(x->subnode.size()) + ");\n";
             code += "    switch (branch) {\n";
             for(int j=0;j<x->subnode.size();j++){
                 code += "        case " + to_string(j) + ":\n";
-                code += "            CALL(func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[j])) + ");\n";
+                if(x->subnode[j]->tp == Type::terminal){
+                        for(auto ch: x->subnode[j]->name){
+                            code += "            extend(" + to_string((unsigned)ch) + ");\n";
+                        }
+                    } else {
+                        code += "            CALL(func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[j])) + ");\n";
+                    }
                 code += "            break;\n";
             }
             code += "    }\n";
         } else if(x->tp == Type::expression){
+            code += "    // Normal function code\n";
             for(auto &k:x->subnode){
-                code += "    CALL(func_" + to_string(reinterpret_cast<uintptr_t>(k)) + ");\n";
+                if(k->tp == Type::terminal){
+                    for(auto ch: k->name){
+                        code += "    extend(" + to_string((unsigned)ch) + ");\n";
+                    }
+                } else {
+                    code += "    CALL(func_" + to_string(reinterpret_cast<uintptr_t>(k)) + ");\n";
+                }
             }
         } else if(x->tp == Type::terminal){
             for(int j=0;j<x->name.size();j++){
                 code += "    extend(" + to_string((unsigned char)x->name[j]) + ");\n";
+            }
+        }
+        code += "    RETURN();\n";
+
+        // Depth exceeded label
+        code += "depth_exceeded:\n";
+        code += "    // Handle depth exceeded\n";
+        if(this->shortcut.count(x) && !this->shortcut[x].empty()){
+            for(int j=0;j<this->shortcut[x].size();j++){
+                code += "    extend(" + to_string((unsigned char)this->shortcut[x][j]) + ");\n";
             }
         }
         code += "    RETURN();\n";
@@ -191,6 +224,8 @@ bool endless = false;
     if(count == -1){
         code += "    endless = true;\n";
     }
+    // Initialize x1 in main
+    code += "    INIT_DEPTH();\n";
     code += "    while(endless || (count>0) ) {\n";
     code += "        CALL(func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + ");\n";
     code += "        count--;\n";
