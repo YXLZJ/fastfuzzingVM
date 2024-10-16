@@ -3,8 +3,7 @@
         ["<program>"]
     ],
     "<program>": [
-        ["<statement>", "<program>"],
-        []
+        ["<statement>", "<program>"]
     ],
     "<statement>": [
         ["<if_statement>"],

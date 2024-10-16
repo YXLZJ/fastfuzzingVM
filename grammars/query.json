@@ -21,8 +21,7 @@
         ["products"]
     ],
     "<where_clause>": [
-        ["WHERE", "<condition>"],
-        []
+        ["WHERE", "<condition>"]
     ],
     "<condition>": [
         ["<column>", "=", "<value>"],
@@ -31,7 +30,7 @@
     ],
     "<value>": [
         ["<number>"],
-        ["'<string>'"]
+        ["<string>"]
     ],
     "<number>": [
         ["<digit>"],

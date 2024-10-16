@@ -13,7 +13,7 @@ import fcntl
 import select
 import stat
 
-models = ["subroutine_generator_c","DT_generator_c","IDT_generator_c","subroutine_low_cost_c"]
+models = ["context"]
 
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
@@ -25,7 +25,7 @@ print(files)
 depth = [8,16,32,64,128]
 
 result = {}
-timeout = 8  # Timeout for each test in seconds
+timeout = 20  # Timeout for each test in seconds
 
 def set_non_blocking(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -47,10 +47,9 @@ def safe_read(stream):
 
 def compile_and_run(program_name, file_name, depth_value):
     print(f"Running: {program_name} with {file_name} at depth {depth_value}")
-    filetype = ".c" if "_c" in program_name else ".fth"
+    filetype = ".c"
     current_file_name = f"{program_name}_{depth_value}_{file_name}{filetype}"
-    output_file = current_file_name[:-2] + ".out" if filetype == ".c" else current_file_name
-    
+    output_file = current_file_name[:-2] + ".out" 
     try:
         if filetype == ".c":
             subprocess.run(
@@ -63,12 +62,6 @@ def compile_and_run(program_name, file_name, depth_value):
             )
             ensure_executable(output_file)
             cmd = ["./" + output_file]
-        else:
-            subprocess.run(
-                ["./"+program_name, "-p", f"./grammars/{file_name}", "-d", str(depth_value), "-o", current_file_name, "--endless"],
-                check=True, timeout=timeout
-            )
-            cmd = ["gforth-fast", current_file_name, "-e", "bye"]
 
         process = subprocess.Popen(
             cmd,
@@ -122,7 +115,7 @@ for program_name in models:
     for file_name in files:
         result[program_name][file_name] = {}
         for depth_value in depth:
-            if "math" in file_name and depth_value > 64:
+            if ("math" or "query") in file_name and depth_value > 64:
                 continue
             output_speed = compile_and_run(program_name, file_name, depth_value)
             result[program_name][file_name][depth_value] = output_speed
@@ -216,7 +209,6 @@ for file_name in {file_name for program_data in results.values() for file_name i
     plt.xticks([math.log(x,2) for x in depths], [str(d) for d in depths])
 
     plt.savefig(f"./result/{file_name}_throughput.png")
-    plt.show()
 
 
 import glob
