@@ -13,7 +13,7 @@ import fcntl
 import select
 import stat
 
-models = ["subroutine_generator_c","DT_generator_c","IDT_generator_c","subroutine_low_cost_c","context_generator_c","switch_generator_c"]
+models = ["subroutine_generator_c","DT_generator_c","IDT_generator_c","subroutine_low_cost_c"]
 
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
