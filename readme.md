@@ -227,7 +227,7 @@ Example of production rule
 
 How to use
 ```
-$ clang++ -std=c++20 -stdlib=libc++ [IDT_generator.cpp | DT_generator.cpp | subroutine_generator.cpp ] -o generator
+$ clang++ -std=c++20 -stdlib=libc++ [IDT.cpp | DT.cpp | subroutine_generator.cpp ...] -o generator
 ./generator -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]
 ```
 C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.
@@ -238,4 +238,5 @@ C++ is used to compile grammar rules into virtual machine, please make sure your
 ![](result/html.json_throughput.png)
 ![](result/math.json_throughput.png)
 ![](result/recursive.json_throughput.png)
-![](result/simple_grammar.json_throughput.png)
+![](result/json.json_throughput.png)
+![](result/if-else.json_throughput.png)
