@@ -13,221 +13,54 @@ There are five different types of instructions supported by the virtual machine.
 | HALT                             | Halt the virtual machine immediately                                                         |
 
 
-## Threading Models 
+### Threading Models 
+In computer science, threaded code is a programming technique where the code has a form that essentially consists entirely of calls to subroutines. It is often used in compilers, which may generate code in that form or be implemented in that form themselves. The code may be processed by an interpreter or it may simply be a sequence of machine code call instructions.[*wikipedia*](https://en.wikipedia.org/wiki/Threaded_code)
+## Direct Threading Model
+Direct Threaded Code is a method of implementing a language interpreter where each operation or instruction points directly to the machine code that implements it. This is the simplest form of threaded code. Each entry in the thread is a pointer to a function or machine instruction. The control flow follows the sequence of instructions by directly invoking the corresponding machine code or function for each operation.
 
-### Indirect Threading Model
+In Direct Threaded Code:
+1. Each instruction contains the address of the machine code for that instruction.
+2. The interpreter reads the next instruction, jumps directly to the code, and repeats the process.
 
-In the indirect threading model, each operation code indirectly points to its corresponding execution code. This means that when an opcode is executed, it jumps indirectly to the code that implements that operation. In this program, variable IP (Instrcution pointer) points the offset of instruction table, then the virtual machine fetches the real address of instruction by adding the base address and offset so that execute it.
+***With this threading model, we probably built the fastest single core fuzzer in the world.***
 
-The example of instruction Table:
-``` Forth
-' RET instructions 0 cells + ! 
-' HALT instructions 1 cells + ! 
-' func_5527066576 instructions 2 cells + ! 
-' func_5527066704 instructions 3 cells + ! 
-' func_5527066128 instructions 4 cells + ! 
-' func_5527066400 instructions 5 cells + ! 
-' func_5527066256 instructions 6 cells + ! 
-' func_5527066192 instructions 7 cells + ! 
-' func_5527067568 instructions 8 cells + ! 
-' func_5527066896 instructions 9 cells + ! 
-' func_5527067760 instructions 10 cells + ! 
-' func_5527067984 instructions 11 cells + ! 
-' func_5527068112 instructions 12 cells + ! 
-' func_5527068304 instructions 13 cells + ! 
-' func_5527068432 instructions 14 cells + ! 
-' func_5527068560 instructions 15 cells + ! 
-' func_5527068688 instructions 16 cells + ! 
-' func_5527068240 instructions 17 cells + ! 
-' func_5527069088 instructions 18 cells + ! 
-' func_5527067264 instructions 19 cells + ! 
-' func_5527067824 instructions 20 cells + ! 
-' func_5527069408 instructions 21 cells + ! 
-' func_5527066960 instructions 22 cells + ! 
-' func_5527069536 instructions 23 cells + ! 
-' func_5527069664 instructions 24 cells + ! 
-' func_5527069824 instructions 25 cells + ! 
-' func_5527070112 instructions 26 cells + ! 
-' func_5527070240 instructions 27 cells + ! 
-' func_5527070368 instructions 28 cells + ! 
-' func_5527070496 instructions 29 cells + ! 
-```
+## Indirect Threading Model
+Indirect Threaded Code uses an additional layer of indirection. Instead of each instruction pointing directly to the machine code, it points to an address that contains the address of the machine code. This allows for more flexible modifications since the addresses in the intermediate layer can be updated without modifying the actual threaded code.
 
-Example of terminal instrution
-``` Forth
-: func_5536499168 ( -- )
-    99 extend-char
-    ip @ 1 cells + ip ! \ increment the instruction pointer
-    ; 
-```
+In Indirect Threaded Code:
 
-Example of non-terminal instrution
-``` Forth
-create func_5536498544_op0 2 cells allot
-3 func_5536498544_op0 0 cells + !
-0 func_5536498544_op0 1 cells + !
+1. Each instruction points to another address (in a table, for example), which then points to the actual machine code.
+2. The interpreter retrieves the next instruction, follows the pointer to find the address of the machine code, and then jumps to it.
 
-: func_5536498544 ( -- )
-    getdepth  maxdepth @ > if
-        97 extend-char
-        98 extend-char
-        99 extend-char
-         ip @ 1 cells + ip ! \ increment the instruction pointer
-    else
-        ip @ 
-        rsp @ ! \ push the return address to the return stack 
-        rsp @ 1 cells + rsp !  \ increment the return stack pointer 
-        1 random
-        case
-            0 of
-                func_5536498544_op0 ip ! endof
-        endcase
-    endif ; 
-```
 
-Example of production rule
-``` Forth
-: func_4947206080 ( -- )
-    getdepth  maxdepth @ > if
-        97 extend-char 
-        98 extend-char 
-        99 extend-char 
-    ip @ 1 cells + ip ! \ increment the instruction pointer
-    else
-    ip @ 
-    rsp @ ! \ push the return address to the return stack 
-    rsp @ 1 cells + rsp !  \ increment the return stack pointer 
-    exp_4947206080 ip !
-    endif ; 
-```
+## Subroutine Threading Model
+Subroutine Threaded Code involves each instruction being implemented as a subroutine call, meaning each entry in the thread directly calls a subroutine. This is common in systems that have efficient subroutine calls, like some modern CPU architectures.
 
-Main loop
-```Forth
-: mainloop
-    1 running !
-    0 buffer-pos !
-    begin
-        running @
-    while
-        instructions ip @ @ cells + @ execute
-    repeat
-;
-```
-The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Indirect Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
+In Subroutine Threaded Code:
 
-**Risk:** This method may impacted by the word 'execute' which used to jump to a specific address, in some Foth systems 'Address execute' are also been taken as function calls that brings extra time consumption 
+1. Each instruction is a subroutine call.
+2. After the subroutine executes, the return mechanism (usually a RET instruction) brings control back to the interpreter.
 
-### Direct Threading Model
+## Context Threading Model
+Each instruction in a virtual machine’s instruction set is associated with a piece of native code or a function that directly handles that instruction’s execution. The key idea is to reduce the overhead of instruction dispatching by eliminating repetitive decoding or indirect jumps for each instruction. This is often achieved by maintaining a direct mapping between virtual machine instructions and the addresses of their corresponding execution handlers.
 
-Addresses in the thread are the addresses of machine language. In this project, variable IP(instruction pointer) indicates the address of instruction directly. 
+In Context Threading Model:
+	1. In a traditional interpreter, after fetching an instruction, the interpreter decodes it and then looks up which function to call to execute it. This decoding and lookup can introduce overhead.
 
-Example of terminal instrution
-``` Forth
-: func_4947206464 ( -- )
-    99 extend-char
-    ip @ 1 cells + ip ! \ increment the instruction pointer
-    ; 
-```
 
-Example of non-terminal instrution
-``` Forth
-: func_4947205872 ( -- )
-    getdepth  maxdepth @ > if
-        97 extend-char
-        98 extend-char
-        99 extend-char
-         ip @ 1 cells + ip ! \ increment the instruction pointer
-    else
-        ip @ 
-        rsp @ ! \ push the return address to the return stack 
-        rsp @ 1 cells + rsp !  \ increment the return stack pointer 
-        1 random
-        case
-            0 of
-                func_4947205872_op0 ip ! endof
-        endcase
-    endif ; 
-```
+## Switch Threading Model
+switch threading (also called switch-dispatch or switch-based interpretation) is a common control flow technique for executing bytecode or intermediate representation (IR) instructions. In this model, each instruction is decoded and executed in a loop using a switch statement in a host programming language, where each case in the switch corresponds to a different bytecode instruction.
 
-Example of production rule
-``` Forth
-: func_4947206080 ( -- )
-    getdepth  maxdepth @ > if
-        97 extend-char 
-        98 extend-char 
-        99 extend-char 
-    ip @ 1 cells + ip ! \ increment the instruction pointer
-    else
-    ip @ 
-    rsp @ ! \ push the return address to the return stack 
-    rsp @ 1 cells + rsp !  \ increment the return stack pointer 
-    exp_4947206080 ip !
-    endif ; 
-```
+In Switch Threaded code:
 
-Main loop
-```Forth
-: mainloop
-    1 running !
-    0 buffer-pos !
-    begin
-        running @
-    while
-        ip @  @ execute
-    repeat
-;
-```
-The instruction pointer(IP) always indicate to the next instruction to be executed, to make sure the calling processing is Indirect Threading Model as it may be impacted by the runtime of Forth, all instructions are generated with Continuation-Passing Style(CPS) so that making sure that Tail Call Optimization(TCO) enables if supported, instruction switching are always be executed as the last statement.
-
-**Risk:** This method may impacted by the word 'execute' which used to jump to a specific address, in some Foth systems 'Address execute' are also been taken as function calls that brings extra time consumption; Accessing variable IP ifself may also cost time.
-
-### Subroutine Threading Model
-
-So-called "subroutine-threaded code" (also "call-threaded code") consists of a series of machine-language "call" instructions (or addresses of functions to "call", as opposed to direct threading's use of "jump").
-
-Example of terminal instrution
-``` Forth
-: func_4923088224 ( dp -- ) { dp }
-    99 extend-char
-    ; 
-```
-
-Example of non-terminal instrution
-``` Forth
-: func_4923087632 ( dp -- ) { dp }
-    dp maxdepth @ > if
-        97 extend-char
-        98 extend-char
-        99 extend-char
-    else
-        1 random
-        case
-            0 of
-                dp 1 + func_4923087840 endof
-        endcase
-    endif ; 
-
-```
-
-Example of production rule
-``` Forth
-: func_4923087840 ( dp -- ) { dp }
-    dp maxdepth @ > if
-        97 extend-char 
-        98 extend-char 
-        99 extend-char 
-    else
-    dp 1 + func_4923087968
-    dp 1 + func_4923088096
-    dp 1 + func_4923088224
-    endif ; 
-```
-
-**Risk:** Please note that the 'defer' keyword is used in this project (used to reserve a keyword in advance, to be implemented later). This keyword may be implemented and optimized differently on various Forth platforms, which can lead to additional overhead when using it.
+1. The interpreter reads one bytecode instruction at a time from a bytecode stream or array.
+2. Dispatch: The interpreter uses a switch or if-else construct to jump to the corresponding code that implements the logic for the current instruction.
+3. Execution: The code in the relevant switch case (or branch) is executed, modifying the virtual machine’s state (like its registers, stack, etc.).
+4. Repeat: After executing the instruction, the interpreter fetches the next instruction, repeats the dispatch, and execution continues.
 
 How to use
 ```
-$ clang++ -std=c++20 -stdlib=libc++ [IDT.cpp | DT.cpp | subroutine_generator.cpp ...] -o generator
+$ clang++ -std=c++20 -stdlib=libc++ [IDT.cpp | DT.cpp | subroutine.cpp ...] -o generator
 ./generator -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]
 ```
 C++ is used to compile grammar rules into virtual machine, please make sure your C++ toolchain support C++20 or above.
@@ -240,3 +73,7 @@ C++ is used to compile grammar rules into virtual machine, please make sure your
 ![](result/recursive.json_throughput.png)
 ![](result/json.json_throughput.png)
 ![](result/if-else.json_throughput.png)
+![](result/control_flow.json_throughput.png)
+![](result/programming.json_throughput.png)
+![](result/query.json_throughput.png)
+![](result/regular_expression.json_throughput.png)

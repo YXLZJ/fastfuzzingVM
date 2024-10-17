@@ -95,9 +95,7 @@ void JIT(string file, int count)
 Buffer buffer;  // Declare a global buffer
 
 #define extend(c) { \
-    if (buffer.top < BUFFER_SIZE) { \
-        buffer.data[buffer.top++] = c; \
-    } \
+    buffer.data[buffer.top++] = c; \
 }
 
 #define clean() { \
