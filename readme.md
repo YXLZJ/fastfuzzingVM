@@ -1,5 +1,7 @@
 # Evaluating Fast VM Technics for Fuzzing.
 
+This research aims to evaluate virtual machine technics to improve the performance of grammar-based fuzzing. 
+
 ## Instruction Set
 
 There are five different types of instructions supported by the virtual machine.
