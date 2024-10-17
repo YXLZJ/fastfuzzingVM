@@ -13,7 +13,7 @@ import fcntl
 import select
 import stat
 
-models = ["DT2"]
+models = ["DT"]
 
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
