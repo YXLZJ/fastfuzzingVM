@@ -13,13 +13,14 @@ import fcntl
 import select
 import stat
 
-models = ["context"]
+models = ["baresubroutine"]
 
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
 
 directory = './grammars'
-files = os.listdir(directory)
+# files = os.listdir(directory)
+files = ["control_flow.json"]
 print(files)
 
 depth = [8,16,32,64,128]
