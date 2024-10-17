@@ -148,8 +148,6 @@ void **PC;           // Program counter
 // Move to the next instruction
 #define NEXT() PC++
 
-bool endless = false;
-
 int main() {
     // Declare local variables as register variables
     register unsigned seed asm("x19") = (unsigned)time(NULL);
@@ -162,7 +160,9 @@ int main() {
 
     if (count == -1)
     {
-        code += "endless = true;\n";
+        code += "register bool endless = true;\n";
+    } else {
+        code += "register bool endless = false;\n";
     }
     code += R"(
     goto LOOP;
