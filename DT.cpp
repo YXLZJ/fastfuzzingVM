@@ -91,30 +91,24 @@ public:
     code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
 
     // Define the Buffer structure
-    code += R"(typedef struct {
-    char data[BUFFER_SIZE];
-    unsigned top;
-} Buffer;
+    code += R"(// Declare buffer
+char data[BUFFER_SIZE];
 
-Buffer buffer;  // Declare buffer
 
 // Define 'extend' macro to append a character to the buffer
 #define extend(c) { \
-    buffer.data[buffer_top++] = c; \
+    data[buffer_top++] = c; \
 }
 
 // Define 'clean' macro to reset the buffer
 #define clean() { \
     buffer_top = 0; \
+    stack_top = frames; \
 }
 
 // Stack structure definition
-typedef struct {
-    void *frames[MAX_DEPTH];     // Array to hold stack frames
-    void **top;
-} Stack;
 
-Stack stack;  // Declare stack
+void *frames[MAX_DEPTH];     // Array to hold stack frames
 
 // Declare variables
 unsigned seed;       // Random seed
@@ -132,11 +126,6 @@ void **PC;           // Program counter
     branch = seed % (l); \
 } while(0)
 
-// Initialize the stack
-#define initStack() do { \
-    stack_top = stack.frames; \
-} while (0)
-
 // Pop operation on the stack
 #define pop() (--stack_top)
 
@@ -153,7 +142,7 @@ int main() {
     register unsigned seed asm("x19") = (unsigned)time(NULL);
     register unsigned branch asm("x20");
     register void **PC asm("x21");
-    register void **stack_top asm("x22") = stack.frames;  // Initialize stack_top
+    register void **stack_top asm("x22") = frames;  // Initialize stack_top
     register unsigned buffer_top asm("x23") = 0;          // Initialize buffer_top
     register unsigned loop_limit asm("x24") = )" + to_string(count) + R"(;
     )";
@@ -202,7 +191,7 @@ int main() {
         code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + ":\n";
         if(x->tp == Type::non_terminal) {
             // Check for maximum recursion depth
-            code += "    if(stack_top == stack.frames + MAX_DEPTH) {\n";
+            code += "    if(stack_top == frames + MAX_DEPTH) {\n";
             for (int j = 0; j < this->shortcut[x].size(); j++) {
                 code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
             }
@@ -223,7 +212,7 @@ int main() {
             code += "    goto **PC;\n";
         } else if(x->tp == Type::expression) {
             // Check for maximum recursion depth
-            code += "    if(stack_top == stack.frames + MAX_DEPTH) {\n";
+            code += "    if(stack_top == frames + MAX_DEPTH) {\n";
             for (int j = 0; j < this->shortcut[x].size(); j++) {
                 code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
             }
@@ -246,15 +235,9 @@ int main() {
 
     // Define HALT and RETURN labels
     code += R"(HALT:
-    // Update 'stack.top' and 'buffer.top' from 'stack_top' and 'buffer_top' before using them
-    stack.top = stack_top;
-    buffer.top = buffer_top;
     // Print the buffer content
-    printf("%.*s\n", (int)buffer.top, buffer.data);
+    printf("%.*s\n", (int)buffer_top, data);
     clean();  // Clean the buffer
-    // Update 'stack_top' and 'buffer_top' from 'stack.top' and 'buffer.top' after cleaning
-    stack_top = stack.top;
-    buffer_top = buffer.top;
     goto LOOP;
 RETURN:
     // Pop from the stack and proceed to the next instruction
