@@ -155,7 +155,7 @@ int main() {
     register void **PC asm("x21");
     register void **stack_top asm("x22") = stack.frames;  // Initialize stack_top
     register unsigned buffer_top asm("x23") = 0;          // Initialize buffer_top
-    register unsigned loop_limit = )" + to_string(count) + R"(;
+    register unsigned loop_limit asm("x24") = )" + to_string(count) + R"(;
     )";
 
     if (count == -1)

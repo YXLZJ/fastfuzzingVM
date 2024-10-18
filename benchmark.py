@@ -116,7 +116,7 @@ for program_name in models:
     for file_name in files:
         result[program_name][file_name] = {}
         for depth_value in depth:
-            if ("math" or "query" or "control_flow") in file_name and depth_value > 64:
+            if any(substring in file_name for substring in ["math", "query", "control_flow"]) and depth_value > 64:
                 continue
             output_speed = compile_and_run(program_name, file_name, depth_value)
             result[program_name][file_name][depth_value] = output_speed
