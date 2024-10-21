@@ -77,7 +77,7 @@ public:
         this->getshortcut();
     };
 
-    void JIT(string file, int count)
+    void JIT(string file)
     {
         string code = R"(#include <stdio.h>
     #include <stdlib.h>
@@ -94,9 +94,11 @@ public:
 
     Buffer buffer;  // Declare a global buffer
 
-    #define extend(c) { \
+#define extend(c) { \
+    if(buffer.top < BUFFER_SIZE) { \
         buffer.data[buffer.top++] = c; \
-    }
+    } \
+}
 
     #define clean() { \
         buffer.top = 0; \
@@ -222,9 +224,10 @@ public:
 
         // Add HALT and RETURN funcs inside main function
         code += R"(HALT:
-    printf("%.*s\n", (int)buffer.top, buffer.data);
-    clean();
-    goto LOOP;
+    FILE *fp = fopen("output.txt", "w");
+    fwrite(buffer.data, sizeof(char), buffer.top, fp);
+    fclose(fp);
+    return 0;
 RETURN:
     PC = *(--stack.top);
     PC++;
@@ -234,12 +237,8 @@ RETURN:
         // Add LOOP func inside main function
 
         code += "LOOP:\n";
-        code += "    if((loop_limit > 0) || (endless == true)) {\n";
-        code += "        loop_limit--;\n";
-        code += "        PC = " + init_program_name + ";\n";
-        code += "        goto ***PC;\n";
-        code += "    }\n";
-        code += "    exit(0);\n";
+        code += "    PC = " + init_program_name + ";\n";
+        code += "    goto ***PC;\n";
         code += "}\n";
         std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
         ofs << code;
@@ -363,20 +362,20 @@ int main(int argc, char *argv[])
         }
         else if (arg == "--help")
         {
-            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file>" << std::endl;
             return 1;
         }
     }
 
     if (depth == 0 || path.empty() || outputFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file>" << std::endl;
         return 1;
     }
 
     std::ifstream f(path);
     json content = json::parse(f);
     Grammar gram = Grammar(content, depth);
-    gram.JIT(outputFile, count);
+    gram.JIT(outputFile);
     return 0;
 }

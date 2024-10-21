@@ -77,7 +77,7 @@ public:
         this->getshortcut();
     };
 
-    void JIT(string file, int count)
+    void JIT(string file)
 {
     // Start building the code string with necessary includes and definitions
     string code = R"(#include <stdio.h>
@@ -95,9 +95,10 @@ public:
 char data[BUFFER_SIZE];
 
 
-// Define 'extend' macro to append a character to the buffer
 #define extend(c) { \
-    data[buffer_top++] = c; \
+    if(buffer_top < BUFFER_SIZE) { \
+        data[buffer_top++] = c; \
+    } \
 }
 
 // Define 'clean' macro to reset the buffer
@@ -144,16 +145,6 @@ int main() {
     register void **PC asm("x21");
     register void **stack_top asm("x22") = frames;  // Initialize stack_top
     register unsigned buffer_top asm("x23") = 0;          // Initialize buffer_top
-    register unsigned loop_limit asm("x24") = )" + to_string(count) + R"(;
-    )";
-
-    if (count == -1)
-    {
-        code += "register bool endless = true;\n";
-    } else {
-        code += "register bool endless = false;\n";
-    }
-    code += R"(
     goto LOOP;
 )";
 
@@ -236,9 +227,10 @@ int main() {
     // Define HALT and RETURN labels
     code += R"(HALT:
     // Print the buffer content
-    printf("%.*s\n", (int)buffer_top, data);
-    clean();  // Clean the buffer
-    goto LOOP;
+    FILE *fp = fopen("output.txt", "w");
+    fwrite(data, sizeof(char), buffer_top, fp);
+    fclose(fp);
+    return 0;
 RETURN:
     // Pop from the stack and proceed to the next instruction
     PC = *(--stack_top);
@@ -248,12 +240,8 @@ RETURN:
 
     // Define the LOOP label
     code += "LOOP:\n";
-    code += "    if((loop_limit > 0) || endless) {\n";
-    code += "        loop_limit--;\n";
-    code += "        PC = " + init_program_name + ";\n";
-    code += "        goto **PC;\n";
-    code += "    }\n";
-    code += "    return 0;\n";
+    code += "    PC = " + init_program_name + ";\n";
+    code += "    goto **PC;\n";
     code += "}\n";
 
     // Write the generated code to the specified file
@@ -379,20 +367,20 @@ int main(int argc, char *argv[])
         }
         else if (arg == "--help")
         {
-            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file>" << std::endl;
             return 1;
         }
     }
 
     if (depth == 0 || path.empty() || outputFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file>" << std::endl;
         return 1;
     }
 
     std::ifstream f(path);
     json content = json::parse(f);
     Grammar gram = Grammar(content, depth);
-    gram.JIT(outputFile, count);
+    gram.JIT(outputFile);
     return 0;
 }

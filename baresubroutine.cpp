@@ -77,7 +77,7 @@ public:
         this->getshortcut();
     };
 
-void JIT(string file, int count)
+void JIT(string file)
 {
     string code = R"(#include <stdio.h>
 #include <stdlib.h>
@@ -95,7 +95,9 @@ void JIT(string file, int count)
 Buffer buffer;  // Declare a global buffer
 
 #define extend(c) { \
-    buffer.data[buffer.top++] = c; \
+    if(buffer.top < BUFFER_SIZE) { \
+        buffer.data[buffer.top++] = c; \
+    } \
 }
 
 #define clean() { \
@@ -217,19 +219,13 @@ bool endless = false;
     }
 
     code += "int main(void) {\n";
-    code += "    static unsigned count = " + to_string(count) + ";\n";
     code += "    seed = time(NULL);\n";
-    if(count == -1){
-        code += "    endless = true;\n";
-    }
     // Initialize x1 in main
     code += "    INIT_DEPTH();\n";
-    code += "    while(endless || (count>0) ) {\n";
-    code += "        CALL(func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + ");\n";
-    code += "        count--;\n";
-    code += "        printf(\"%.*s\\n\", (int)buffer.top, buffer.data);\n";
-    code += "        clean();\n";
-    code += "    }\n";
+    code += "    CALL(func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + ");\n";
+    code += "    FILE *fp = fopen(\"output.txt\", \"w\");\n";
+    code += "    fwrite(buffer.data, sizeof(char), buffer.top, fp);\n";
+    code += "    fclose(fp);\n";
     code += "    return 0;\n";
     code += "}\n";
     std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
@@ -345,30 +341,22 @@ int main(int argc, char *argv[])
         {
             outputFile = argv[++i];
         }
-        else if (arg == "-c" && i + 1 < argc)
-        {
-            count = std::atoi(argv[++i]);
-        }
-        else if (arg == "--endless")
-        {
-            count = -1;
-        }
         else if (arg == "--help")
         {
-            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> -c <count of loops>" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> " << std::endl;
             return 1;
         }
     }
 
     if (depth == 0 || path.empty() || outputFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> [-c <count of loops> | --endless]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -d <number> -p <path> -o <output file> " << std::endl;
         return 1;
     }
 
     std::ifstream f(path);
     json content = json::parse(f);
     Grammar gram = Grammar(content, depth);
-    gram.JIT(outputFile, count);
+    gram.JIT(outputFile);
     return 0;
 }

@@ -13,7 +13,7 @@ import fcntl
 import select
 import stat
 
-models = ["DT"]
+models = ["DT","IDT","subroutine","context","switch","baresubroutine"]
 
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
@@ -26,7 +26,7 @@ print(files)
 depth = [8,16,32,64,128]
 
 result = {}
-timeout = 20  # Timeout for each test in seconds
+timeout = 8  # Timeout for each test in seconds
 
 def set_non_blocking(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -58,7 +58,7 @@ def compile_and_run(program_name, file_name, depth_value):
                 check=True, timeout=timeout
             )
             subprocess.run(
-                ["clang", current_file_name,"-o", output_file],
+                ["clang", current_file_name,"-O","-o",output_file],
                 check=True, timeout=140
             )
             ensure_executable(output_file)
