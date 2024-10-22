@@ -1,0 +1,38 @@
+{
+    "20": {
+        "average_time": 0.0193437,
+        "average_size": 109.2
+    },
+    "25": {
+        "average_time": 0.0190689,
+        "average_size": 181
+    },
+    "30": {
+        "average_time": 0.0191922,
+        "average_size": 300
+    },
+    "35": {
+        "average_time": 0.0191487,
+        "average_size": 118
+    },
+    "40": {
+        "average_time": 0.02167775,
+        "average_size": 148
+    },
+    "45": {
+        "average_time": 0.0190531,
+        "average_size": 62
+    },
+    "50": {
+        "average_time": 0.0195386,
+        "average_size": 87
+    },
+    "55": {
+        "average_time": 0.0221428,
+        "average_size": 151
+    },
+    "60": {
+        "average_time": 0.01658855,
+        "average_size": 109
+    }
+}

@@ -145,6 +145,7 @@ int main() {
     register void **PC asm("x21");
     register void **stack_top asm("x22") = frames;  // Initialize stack_top
     register unsigned buffer_top asm("x23") = 0;          // Initialize buffer_top
+    register FILE *fp = fopen("output.txt", "w");
     goto LOOP;
 )";
 
@@ -227,7 +228,6 @@ int main() {
     // Define HALT and RETURN labels
     code += R"(HALT:
     // Print the buffer content
-    FILE *fp = fopen("output.txt", "w");
     fwrite(data, sizeof(char), buffer_top, fp);
     fclose(fp);
     return 0;

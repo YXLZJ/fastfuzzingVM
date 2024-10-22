@@ -149,6 +149,7 @@ bool endless = false;
         code += "case "+to_string(nodes.size()+1)+": goto HALT;}\n";
         code+=R"(int main() {
     seed = time(NULL);
+    FILE *fp = fopen("output.txt", "w");
     initStack();
 )";       
         string init_program_name = "";
@@ -216,7 +217,6 @@ bool endless = false;
 
         // Add HALT and RETURN funcs inside main function
         code += R"(HALT:
-        FILE *fp = fopen("output.txt", "w");
         fwrite(buffer.data, sizeof(char), buffer.top, fp);
         fclose(fp);
         return 0;

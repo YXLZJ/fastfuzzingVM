@@ -1,226 +1,170 @@
-import time
-import subprocess
-import matplotlib.pyplot as plt
-import psutil
 import os
-import re
-import threading
-import csv
-import signal
-import numpy as np
-import math
-import fcntl
-import select
-import stat
+import subprocess
+from datetime import datetime
+import json
+import statistics
 
-models = ["DT","IDT","subroutine","context","switch","baresubroutine"]
+class Tester:
+    def __init__(self, name, fuzzer_executable, grammar_file, depths, iterations=2, timeout=3600):
+        """
+        Initializes the Tester instance.
 
-for model in models:
-    subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
+        :param name: Name of the test (combination of fuzzer and grammar)
+        :param fuzzer_executable: Executable file of the fuzzer compiler
+        :param grammar_file: Path to the grammar file
+        :param depths: List of depths to test
+        :param iterations: Number of iterations per depth
+        :param timeout: Timeout for each test run
+        """
+        self.name = name
+        self.fuzzer_executable = fuzzer_executable
+        self.grammar_file = grammar_file
+        self.depths = depths
+        self.iterations = iterations
+        self.timeout = timeout
+        self.results = {}
 
-directory = './grammars'
-files = os.listdir(directory)
+    def generate_c_code(self, max_depth):
+        """
+        Generates the C code from the grammar file at the specified depth.
 
-print(files)
+        :param max_depth: Maximum depth for the fuzzer
+        :return: Path to the generated C file
+        """
+        output_c = f"generated/{self.name}_{max_depth}.c"
+        cmd = f"./{self.fuzzer_executable} -d {max_depth} -p {self.grammar_file} -o {output_c}"
+        if not os.path.exists(output_c):
+            print(f"Generating C code for depth {max_depth}...")
+            subprocess.run(cmd, shell=True, check=True)
+        else:
+            print(f"C code for depth {max_depth} already exists. Skipping generation.")
+        return output_c
 
-depth = [8,16,32,64,128]
+    def compile_c_code(self, output_c):
+        """
+        Compiles the generated C code into an executable using clang.
 
-result = {}
-timeout = 8  # Timeout for each test in seconds
+        :param output_c: Path to the generated C file
+        :return: Name of the compiled executable
+        """
+        executable = output_c.replace('.c', '')
+        if not os.path.exists(executable):
+            print(f"Compiling {output_c}...")
+            compile_cmd = f"clang {output_c} -o {executable}"
+            subprocess.run(compile_cmd, shell=True, check=True)
+        else:
+            print(f"Executable {executable} already exists. Skipping compilation.")
+        return executable
 
-def set_non_blocking(fd):
-    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    def run_executable(self, executable):
+        """
+        Runs the compiled executable and measures its execution time.
 
-def ensure_executable(file_path):
-    try:
-        current_permissions = stat.S_IMODE(os.lstat(file_path).st_mode)
-        os.chmod(file_path, current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    except OSError as e:
-        print(f"Error setting executable permissions on {file_path}: {e}")
+        :param executable: Executable file generated from the C code
+        :return: Execution time in seconds
+        """
+        start_time = datetime.now()
+        subprocess.run(f"./{executable}", shell=True, check=True, timeout=self.timeout)
+        end_time = datetime.now()
+        execution_time = (end_time - start_time).total_seconds()
+        return execution_time
 
-def safe_read(stream):
-    try:
-        chunk = stream.read(4096)
-        return b'' if chunk is None else chunk
-    except Exception:
-        return b''
+    def run_test(self):
+        """
+        Runs tests for each specified depth and iteration, collecting results.
+        """
+        # Ensure the generated code directory exists
+        os.makedirs('generated', exist_ok=True)
 
-def compile_and_run(program_name, file_name, depth_value):
-    print(f"Running: {program_name} with {file_name} at depth {depth_value}")
-    filetype = ".c"
-    current_file_name = f"{program_name}_{depth_value}_{file_name}{filetype}"
-    output_file = current_file_name[:-2] + ".out" 
-    try:
-        if filetype == ".c":
-            subprocess.run(
-                ["./"+program_name, "-p", f"./grammars/{file_name}", "-d", str(depth_value), "-o", current_file_name, "--endless"],
-                check=True, timeout=timeout
+        for depth in self.depths:
+            print(f"\nTesting {self.name} at depth {depth}")
+            depth_results = []
+            # Generate C code and compile it once per depth
+            output_c = self.generate_c_code(depth)
+            executable = self.compile_c_code(output_c)
+
+            for seed in range(self.iterations):
+                print(f"Iteration {seed + 1}/{self.iterations}")
+                # Run the executable
+                try:
+                    execution_time = self.run_executable(executable)
+                except subprocess.TimeoutExpired:
+                    print(f"Execution timed out for {executable}")
+                    execution_time = self.timeout
+                # Collect results
+                output_size = os.path.getsize('output.txt') if os.path.exists('output.txt') else 0
+                depth_results.append({'execution_time': execution_time, 'output_size': output_size})
+                # Clean up output file
+                if os.path.exists('output.txt'):
+                    os.remove('output.txt')
+            # Calculate average results for the depth
+            avg_time = statistics.mean([res['execution_time'] for res in depth_results])
+            avg_size = statistics.mean([res['output_size'] for res in depth_results])
+            self.results[depth] = {'average_time': avg_time, 'average_size': avg_size}
+            print(f"Depth {depth}: Average Time = {avg_time:.2f}s, Average Size = {avg_size / 1024:.2f}KB")
+            # Optional: Clean up the generated executable and C code after testing
+            # os.remove(executable)
+            # os.remove(output_c)
+
+    def save_results(self):
+        """
+        Saves the collected results into a JSON file.
+        """
+        os.makedirs('results', exist_ok=True)
+        result_file = f'results/{self.name}_results.json'
+        with open(result_file, 'w') as f:
+            json.dump(self.results, f, indent=4)
+        print(f"Results saved to {result_file}")
+
+def main():
+    # List of fuzzers and their source files
+    fuzzers = [
+        {'name': 'DT', 'source': 'DT.cpp'},
+        {'name': 'IDT', 'source': 'IDT.cpp'},
+        {'name': 'baresubroutine', 'source': 'baresubroutine.cpp'},
+        {'name': 'subroutine', 'source': 'subroutine.cpp'},
+        {'name': 'switch', 'source': 'switch.cpp'},
+        {'name': 'context', 'source': 'context.cpp'}
+    ]
+
+    # List of grammar files
+    grammar_files = [
+        'grammars/control_flow.json',
+        'grammars/css.json',
+        'grammars/html.json',
+        'grammars/if-else.json',
+        'grammars/json.json',
+        'grammars/math.json',
+        'grammars/programming.json',
+        'grammars/query.json',
+        'grammars/recursive.json',
+        'grammars/regular_expression.json'
+    ]
+
+    # Depths to test
+    depths = [4, 6, 8, 10, 12, 16, 18, 20, 32, 64]
+
+    # Compile the fuzzer source files using clang++
+    for fuzzer in fuzzers:
+        fuzzer_executable = f"{fuzzer['name']}_compiler"
+        compile_cmd = f"clang++ {fuzzer['source']} -o {fuzzer_executable}"
+        print(f"Compiling {fuzzer['source']} to {fuzzer_executable}...")
+        subprocess.run(compile_cmd, shell=True, check=True)
+        fuzzer['executable'] = fuzzer_executable
+
+    # Run tests for each fuzzer and grammar combination
+    for grammar_file in grammar_files:
+        print(f"\nTesting with grammar file: {grammar_file}")
+        for fuzzer in fuzzers:
+            tester = Tester(
+                name=f"{fuzzer['name']}_{os.path.basename(grammar_file).replace('.json', '')}",
+                fuzzer_executable=fuzzer['executable'],
+                grammar_file=grammar_file,
+                depths=depths,
+                iterations=20  # Adjust the number of iterations as needed
             )
-            subprocess.run(
-                ["clang", current_file_name,"-O","-o",output_file],
-                check=True, timeout=140
-            )
-            ensure_executable(output_file)
-            cmd = ["./" + output_file]
+            tester.run_test()
+            tester.save_results()
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            bufsize=0,
-            universal_newlines=False,
-            preexec_fn=os.setsid
-        )
-
-        set_non_blocking(process.stdout.fileno())
-        set_non_blocking(process.stderr.fileno())
-
-        start_time = time.time()
-        total_bytes = 0
-
-        while time.time() - start_time < timeout:
-            ready, _, _ = select.select([process.stdout, process.stderr], [], [], 1)
-            for stream in ready:
-                chunk = safe_read(stream)
-                total_bytes += len(chunk)
-
-            if process.poll() is not None:
-                break
-
-        if process.poll() is None:
-            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-
-        elapsed_time = min(time.time() - start_time, timeout)
-        output_speed = total_bytes / elapsed_time
-        print(f"Finished: {program_name} {file_name} {depth_value} - {output_speed:.2f} Bytes/s")
-        return output_speed
-
-    except subprocess.CalledProcessError:
-        print(f"Error: {program_name} {file_name} {depth_value} - Compilation or execution failed")
-        return 0
-    except subprocess.TimeoutExpired:
-        print(f"Timeout: {program_name} {file_name} {depth_value} - Execution timed out")
-        return 0
-    except Exception as e:
-        print(f"Unexpected error: {program_name} {file_name} {depth_value} - {e}")
-        return 0
-
-# Main execution loop
-for program_name in models:
-    result[program_name] = {}
-    for file_name in files:
-        result[program_name][file_name] = {}
-        for depth_value in depth:
-            if any(substring in file_name for substring in ["math", "query", "control_flow"]) and depth_value > 64:
-                continue
-            output_speed = compile_and_run(program_name, file_name, depth_value)
-            result[program_name][file_name][depth_value] = output_speed
-
-print("Final results:", result)
-
-## convert the result in MB/s
-for i in range(len(models)):
-    program_name = models[i]
-    for j in range(len(files)):
-        file_name = files[j]
-        for k in range(len(depth)):
-            depth_value = depth[k]
-            if program_name in result and file_name in result[program_name] and depth_value in result[program_name][file_name]:
-                result[program_name][file_name][depth_value] = result[program_name][file_name][depth_value] / 1024 / 1024
-
-import csv
-
-# Read existing data into a dictionary
-data_dict = {}
-
-try:
-    with open('results2.csv', mode='r', newline='') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            key = (row['Program'], row['File'], row['Depth'])
-            data_dict[key] = row['Average Throughput Rate (MB/s)']
-except FileNotFoundError:
-    # If the file does not exist, we'll create it later
-    pass
-
-# Update the dictionary with new results
-for program_name, files_dict in result.items():
-    for file_name, depths_dict in files_dict.items():
-        for depth_value, avg_throughput_rate in depths_dict.items():
-            key = (program_name, file_name, str(depth_value))
-            data_dict[key] = str(avg_throughput_rate)
-
-# Write the updated data back to the CSV file
-with open('results2.csv', mode='w', newline='') as file:
-    fieldnames = ['Program', 'File', 'Depth', 'Average Throughput Rate (MB/s)']
-    writer = csv.DictWriter(file, fieldnames=fieldnames)
-    writer.writeheader()
-    for key, avg_throughput_rate in data_dict.items():
-        program_name, file_name, depth_value = key
-        writer.writerow({
-            'Program': program_name,
-            'File': file_name,
-            'Depth': depth_value,
-            'Average Throughput Rate (MB/s)': avg_throughput_rate
-        })
-
-print("Results have been updated in results2.csv")
-
-csv_filename = 'results2.csv'
-
-results = {}
-
-with open(csv_filename, mode='r') as file:
-    reader = csv.DictReader(file)
-    for row in reader:
-        program_name = row['Program']
-        file_name = row['File']
-        dp = int(row['Depth'])
-        avg_throughput_rate = float(row['Average Throughput Rate (MB/s)'])
-
-        if program_name not in results:
-            results[program_name] = {}
-        if file_name not in results[program_name]:
-            results[program_name][file_name] = {}
-
-        if dp not in results[program_name][file_name]:
-            results[program_name][file_name][dp] = []
-        
-        results[program_name][file_name][dp].append(avg_throughput_rate)
-
-for file_name in {file_name for program_data in results.values() for file_name in program_data.keys()}:
-    plt.figure()
-    for program_name in results.keys():
-        if file_name in results[program_name]:
-            depths = sorted(results[program_name][file_name].keys())
-            rates = [results[program_name][file_name][d] for d in depths]
-            plt.plot([math.log(x,2) for x in depths], rates, marker='o', label=program_name)
-    
-    plt.xlabel('Depth')
-    plt.ylabel('Average Throughput Rate (MB/s)')
-    plt.title(f'Average Throughput Rate for {file_name}')
-    plt.legend()
-    plt.grid(True)
-
-    plt.xticks([math.log(x,2) for x in depths], [str(d) for d in depths])
-
-    plt.savefig(f"./result/{file_name}_throughput.png")
-
-
-import glob
-
-current_directory = os.getcwd()
-files = glob.glob(os.path.join(current_directory, '*.fth'))
-files += glob.glob(os.path.join(current_directory, '*.c'))
-files += glob.glob(os.path.join(current_directory, '*.out'))
-for file in files:
-    try:
-        os.remove(file)
-        print(f'Deleted: {file}')
-    except Exception as e:
-        print(f'Error deleting {file}: {e}')
+if __name__ == "__main__":
+    main()

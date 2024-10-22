@@ -141,6 +141,7 @@ public:
 
     int main() {
         seed = time(NULL);
+        FILE *fp = fopen("output.txt", "w");
         initStack();
     )";
         code += "    unsigned loop_limit = " + to_string(count) + ";\n";
@@ -224,7 +225,6 @@ public:
 
         // Add HALT and RETURN funcs inside main function
         code += R"(HALT:
-    FILE *fp = fopen("output.txt", "w");
     fwrite(buffer.data, sizeof(char), buffer.top, fp);
     fclose(fp);
     return 0;
