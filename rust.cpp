@@ -77,126 +77,140 @@ public:
         this->getshortcut();
     };
 
-    void JIT(string file, int count)
-    {
-        string code = R"(#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <string.h>
-#include <stdbool.h>
-#define BUFFER_SIZE 512*1024*1024   // buffer for storing text
+void JIT(string file, int count)
+{
+    string code;
+
+    // Start by importing necessary Rust libraries
+    code += R"(use std::fs::File;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
+const BUFFER_SIZE: usize = 512 * 1024 * 1024; // Buffer for storing text
 )";
-        code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
-        code += R"(typedef struct {
-    char data[BUFFER_SIZE];
-    unsigned top;
-} Buffer;
 
-Buffer buffer;  // Declare a global buffer
+    // Define MAX_DEPTH constant in Rust
+    code += "const MAX_DEPTH: usize = " + to_string(this->maxdepth) + ";\n\n";
 
-#define extend(c) { \
-    buffer.data[buffer.top++] = c; \
+    // Define the Buffer struct in Rust
+    code += R"(struct Buffer {
+    data: Vec<u8>,
 }
 
-#define clean() { \
-    buffer.top = 0; \
+impl Buffer {
+    fn new() -> Self {
+        Buffer { data: Vec::with_capacity(BUFFER_SIZE) }
+    }
+
+    fn extend(&mut self, c: u8) {
+        self.data.push(c);
+    }
+
+    fn clean(&mut self) {
+        self.data.clear();
+    }
+}
+)";
+
+    // Define the Random struct in Rust
+    code += R"(struct Random {
+    seed: u64,
 }
 
-unsigned seed;  // Random seed
-unsigned branch;  // To hold branch value
+impl Random {
+    fn new(seed: u64) -> Self {
+        Random { seed }
+    }
 
-typedef void (*Inst)();
-Inst *PC;
-
-// xor to get random number
-#define xor(l) \
-    seed ^= seed << 13; \
-    seed ^= seed >> 17; \
-    seed ^= seed << 5; \
-    branch = seed % l
-
-bool endless = false;
-
+    fn xor(&mut self, l: usize) -> usize {
+        self.seed ^= self.seed << 13;
+        self.seed ^= self.seed >> 17;
+        self.seed ^= self.seed << 5;
+        (self.seed as usize) % l
+    }
+}
 )";
-        // Create the signature of the functions
-        for(auto &x : nodes){
-            code += "void func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "(unsigned depth);\n";
-        }
-        // Create the PROGRAMS
-        // string init_program_name = "";
-        // for(auto x : nodes){
-        //     if(x->tp == Type::non_terminal){
-        //         for(int i=0;i< x->subnode.size();i++){
-        //             if(x!=this->start){
-        //                 code+="Inst func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = {func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + ", RETURN};\n";
-        //             } else {
-        //                 code+="Inst func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = {func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + ", HALT};\n";
-        //                 init_program_name = "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i);
-        //             }
-        //         }
-        //     } else if(x->tp == Type::expression){
-        //         code += "Inst exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + "[" + to_string(x->subnode.size()+1) + "] = {";
-        //         for(int i=0;i<x->subnode.size();i++){
-        //             code += "func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + ", ";
-        //         }
-        //         code += "RETURN};\n";
-        //     }
-        // }
-        for(auto &x: nodes){
-            code += "void func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "(register unsigned depth) {\n";
-                if(x->tp == Type::non_terminal){
-                    code += "    if(depth > MAX_DEPTH) {\n";
-                for(int j=0;j<this->shortcut[x].size();j++){
-                    code += "        extend(" + to_string((unsigned)shortcut[x][j]) + ");\n";
-                }
-                code += "        return;\n";
-                code += "    }\n";
-                code += "    xor(" + to_string(x->subnode.size()) + ");\n";
-                code += "    switch (branch) {\n";
-                for(int j=0;j<x->subnode.size();j++){
-                    code += "        case " + to_string(j) + ":\n";
-                    code += "            func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[j])) + "(depth+1);\n";
-                    code += "        break;\n";
-                }
-                code += "    }\n";
-            } else if(x->tp == Type::expression){
-                code += "    if(depth > MAX_DEPTH) {\n";
-                for(int j=0;j<this->shortcut[x].size();j++){
-                    code += "        extend(" + to_string((unsigned)shortcut[x][j]) + ");\n";
-                }
-                code += "        return;\n";
-                code += "    }\n";
-                for(auto &k:x->subnode){
-                    code += "    func_" + to_string(reinterpret_cast<uintptr_t>(k)) + "(depth+1);\n";
-                }
-            } else if(x->tp == Type::terminal){
-                for(int j=0;j<x->name.size();j++){
-                    code += "    extend(" + to_string((unsigned)x->name[j]) + ");\n";
+
+    // Generate function signatures for each node
+    for (auto &x : nodes) {
+        string func_name = "func_" + to_string(reinterpret_cast<uintptr_t>(x));
+        code += "fn " + func_name + "(depth: usize, buffer: &mut Buffer, random: &mut Random) {\n";
+
+        if (x->tp == Type::non_terminal) {
+            code += "    if depth > MAX_DEPTH {\n";
+            if (this->shortcut.find(x) != this->shortcut.end()) {
+                for (auto &c : this->shortcut[x]) {
+                    code += "        buffer.extend(" + to_string((unsigned char)c) + ");\n";
                 }
             }
-            code += "    return;\n";
-            code += "}\n";
+            code += "        return;\n";
+            code += "    }\n";
+            code += "    let branch = random.xor(" + to_string(x->subnode.size()) + ");\n";
+            code += "    match branch {\n";
+            for (size_t j = 0; j < x->subnode.size(); j++) {
+                string sub_func_name = "func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[j]));
+                code += "        " + to_string(j) + " => {\n";
+                code += "            " + sub_func_name + "(depth + 1, buffer, random);\n";
+                code += "        },\n";
+            }
+            code += "        _ => {}\n";
+            code += "    }\n";
+        } else if (x->tp == Type::expression) {
+            code += "    if depth > MAX_DEPTH {\n";
+            if (this->shortcut.find(x) != this->shortcut.end()) {
+                for (auto &c : this->shortcut[x]) {
+                    code += "        buffer.extend(" + to_string((unsigned char)c) + ");\n";
+                }
+            }
+            code += "        return;\n";
+            code += "    }\n";
+            for (auto &k : x->subnode) {
+                string sub_func_name = "func_" + to_string(reinterpret_cast<uintptr_t>(k));
+                code += "    " + sub_func_name + "(depth + 1, buffer, random);\n";
+            }
+        } else if (x->tp == Type::terminal) {
+            for (char ch : x->name) {
+                code += "    buffer.extend(" + to_string((unsigned char)ch) + ");\n";
+            }
         }
-
-        code += "int main(void) {\n";
-        code += "    static unsigned count = " + to_string(count) + ";\n";
-        code += "    seed = time(NULL);\n";
-        if(count == -1){
-            code += "    endless = true;\n";
-        }
-        code += "    while(endless || (count>0) ) {\n";
-        code += "        func_" + to_string(reinterpret_cast<uintptr_t>(this->start)) + "(1);\n";
-        code += "        count--;\n";
-        code += "        printf(\"%.*s\\n\", (int)buffer.top, buffer.data);\n";
-        code += "        clean();\n";
-        code += "    }\n";
-        code += "    return 0;\n";
-        code += "}\n";
-        std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
-        ofs << code;
-        ofs.close();
-        std::cout << "Code written to file successfully." << std::endl;
+        code += "}\n\n";
     }
+
+    // Main function in Rust
+    code += "fn main() {\n";
+    code += "    let mut buffer = Buffer::new();\n";
+    code += "    let seed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();\n";
+    code += "    let mut random = Random::new(seed);\n";
+
+    // Decide the loop type based on the value of `count`
+    if (count == -1) {
+        // If count is -1, generate an endless loop in Rust
+        code += "    loop {\n";
+        string start_func_name = "func_" + to_string(reinterpret_cast<uintptr_t>(this->start));
+        code += "        " + start_func_name + "(1, &mut buffer, &mut random);\n";
+        code += "        println!(\"{}\", String::from_utf8_lossy(&buffer.data));\n";
+        code += "        buffer.clean();\n";
+        code += "    }\n";
+    } else {
+        // Generate a finite loop for a specified count in Rust
+        code += "    let mut count = " + to_string(count) + ";\n";
+        code += "    while count > 0 {\n";
+        string start_func_name = "func_" + to_string(reinterpret_cast<uintptr_t>(this->start));
+        code += "        " + start_func_name + "(1, &mut buffer, &mut random);\n";
+        code += "        println!(\"{}\", String::from_utf8_lossy(&buffer.data));\n";
+        code += "        buffer.clean();\n";
+        code += "        count -= 1;\n";
+        code += "    }\n";
+    }
+
+    code += "}\n";
+
+    // Write the generated Rust code to the specified file
+    std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
+    ofs << code;
+    ofs.close();
+    std::cout << "Code written to file successfully." << std::endl;
+}
+
     private:
         vector<Node *> nodes;
         map<string, Node *> mp;
@@ -204,6 +218,7 @@ bool endless = false;
         Node *start;
         unsigned maxdepth;
         map<Node *, string> shortcut;
+        
         Node *allocate_node(string name, Type tp)
         {
             Node *newnode = new Node();

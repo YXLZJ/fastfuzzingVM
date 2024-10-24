@@ -13,17 +13,19 @@ import fcntl
 import select
 import stat
 
-models = ["DT"]
+models = ["subroutine"]
 
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
 
+
 directory = './grammars'
 files = os.listdir(directory)
-
+files.remove('recursive.json')
+# files = ["json.json"]
 print(files)
 
-depth = [8,16,32,64,128]
+depth = [10,20,30,40,50,60,70,80,90,100,110,120]
 
 result = {}
 timeout = 20  # Timeout for each test in seconds
@@ -48,8 +50,8 @@ def safe_read(stream):
 
 def compile_and_run(program_name, file_name, depth_value):
     print(f"Running: {program_name} with {file_name} at depth {depth_value}")
-    filetype = ".c"
-    current_file_name = f"{program_name}_{depth_value}_{file_name}{filetype}"
+    filetype = ".rs" if program_name == "rust" else ".c"
+    current_file_name = f"{program_name}_{depth_value}_{file_name}"[:-5:]+filetype
     output_file = current_file_name[:-2] + ".out" 
     try:
         if filetype == ".c":
@@ -57,13 +59,29 @@ def compile_and_run(program_name, file_name, depth_value):
                 ["./"+program_name, "-p", f"./grammars/{file_name}", "-d", str(depth_value), "-o", current_file_name, "--endless"],
                 check=True, timeout=timeout
             )
-            subprocess.run(
-                ["clang", current_file_name,"-o", output_file],
-                check=True, timeout=140
-            )
+            ## Switch connot be compiled with optimisation level 2
+            if ("switch" in program_name) or ("baresubroutine" in program_name):
+                subprocess.run(
+                    ["clang", current_file_name,"-o", output_file],
+                    check=True, timeout=140
+                )
+            else:
+                subprocess.run(
+                    ["clang", current_file_name,"-O3","-o", output_file],
+                    check=True, timeout=140
+                )
             ensure_executable(output_file)
             cmd = ["./" + output_file]
-
+        else:
+            subprocess.run(
+                ["./"+program_name, "-p", f"./grammars/{file_name}", "-d", str(depth_value), "-o", current_file_name, "--endless"],
+                check=True, timeout=timeout
+            )
+            subprocess.run(
+                ["rustc", current_file_name,"-C","opt-level=3","-C","target-cpu=native","-o", output_file],
+                check=True, timeout=140
+            )
+            cmd = ["./" + output_file]
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -171,56 +189,4 @@ with open('results2.csv', mode='w', newline='') as file:
 
 print("Results have been updated in results2.csv")
 
-csv_filename = 'results2.csv'
 
-results = {}
-
-with open(csv_filename, mode='r') as file:
-    reader = csv.DictReader(file)
-    for row in reader:
-        program_name = row['Program']
-        file_name = row['File']
-        dp = int(row['Depth'])
-        avg_throughput_rate = float(row['Average Throughput Rate (MB/s)'])
-
-        if program_name not in results:
-            results[program_name] = {}
-        if file_name not in results[program_name]:
-            results[program_name][file_name] = {}
-
-        if dp not in results[program_name][file_name]:
-            results[program_name][file_name][dp] = []
-        
-        results[program_name][file_name][dp].append(avg_throughput_rate)
-
-for file_name in {file_name for program_data in results.values() for file_name in program_data.keys()}:
-    plt.figure()
-    for program_name in results.keys():
-        if file_name in results[program_name]:
-            depths = sorted(results[program_name][file_name].keys())
-            rates = [results[program_name][file_name][d] for d in depths]
-            plt.plot([math.log(x,2) for x in depths], rates, marker='o', label=program_name)
-    
-    plt.xlabel('Depth')
-    plt.ylabel('Average Throughput Rate (MB/s)')
-    plt.title(f'Average Throughput Rate for {file_name}')
-    plt.legend()
-    plt.grid(True)
-
-    plt.xticks([math.log(x,2) for x in depths], [str(d) for d in depths])
-
-    plt.savefig(f"./result/{file_name}_throughput.png")
-
-
-import glob
-
-current_directory = os.getcwd()
-files = glob.glob(os.path.join(current_directory, '*.fth'))
-files += glob.glob(os.path.join(current_directory, '*.c'))
-files += glob.glob(os.path.join(current_directory, '*.out'))
-for file in files:
-    try:
-        os.remove(file)
-        print(f'Deleted: {file}')
-    except Exception as e:
-        print(f'Error deleting {file}: {e}')
