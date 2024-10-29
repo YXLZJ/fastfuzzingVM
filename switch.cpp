@@ -78,171 +78,178 @@ public:
     };
 
     void JIT(string file, int count)
-    {
-        string code = R"(#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <string.h>
-#include <stdbool.h>
-#define BUFFER_SIZE 512*1024*1024   // buffer for storing text
-)";
+{
+    string code = R"(#include <stdio.h>
+    #include <stdlib.h>
+    #include <time.h>
+    #include <string.h>
+    #include <stdbool.h>
+    #define BUFFER_SIZE (512*1024*1024)   // Buffer for storing text
+    )";
     code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
-    code += R"(typedef struct {
-    char data[BUFFER_SIZE];
-    unsigned top;
-} Buffer;
 
-Buffer buffer;  // Declare a global buffer
+    // Eliminate structures and declare variables directly
+    code += R"(
+    char data[BUFFER_SIZE];     // Buffer data array
+    void *frames[MAX_DEPTH];    // Stack frames
 
-#define extend(c) { \
-    buffer.data[buffer.top++] = c; \
-}
-
-#define clean() { \
-    buffer.top = 0; \
-}
-
-unsigned seed;  // Random seed
-unsigned branch;  // To hold branch value
-unsigned *PC; // program counter (now a void pointer)
-
-// xor to get random number
-#define xor(l) \
-    seed ^= seed << 13; \
-    seed ^= seed >> 17; \
-    seed ^= seed << 5; \
-    branch = seed % l
-
-#define initStack() do { \
-    stack.top = stack.frames; \
-} while (0)
-
-#define pop() (stack.top--)
-
-#define store() do { \
-    *(stack.top++) = PC; \
-} while (0)
-
-#define jmp_loop() goto LOOP
-
-#define NEXT PC++
-
-// the stack from frames
-typedef struct {
-    void *frames[MAX_DEPTH];     // the first pointer of frames
-    void **top;              // the top of stack
-} Stack;
-
-Stack stack;
-
-bool endless = false;
-)";
-        map<Node*,int> table;
-        code+= "#define GO switch(*PC) {";
-        for(int i= 0;i<nodes.size();i++) {
-            table[nodes[i]] = i;
-            code+= "case "+to_string(i)+": goto func_"+to_string(reinterpret_cast<uintptr_t>(nodes[i]))+";";
-        }
-        code += "case "+to_string(nodes.size())+": goto RETURN;";
-        code += "case "+to_string(nodes.size()+1)+": goto HALT;}\n";
-        code+=R"(int main() {
-    seed = time(NULL);
-    initStack();
-)"; 
-        code += "    unsigned loop_limit = " + to_string(count) + ";\n";
-        if (count == -1)
-        {
-            code += "    endless = true;\n";
-        }        
-        string init_program_name = "";
-        // Add programs (modified for func-based implementation inside main)
-        for(auto &x : this->nodes) {
-            if(x->tp == Type::non_terminal) {
-                for(int i = 0; i < x->subnode.size(); i++) {
-                    if(x!=this->start) {
-                        code += "    static unsigned func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { "+ to_string(table[x->subnode[i]]) + ", " +to_string(nodes.size())+"};\n";
-                    } else {
-                        code += "    static unsigned func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { " + to_string(table[x->subnode[i]]) + ", " +to_string(nodes.size()+1)+"};\n";
-                        init_program_name = "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i);
-                    }
-                }
-            } else if(x->tp == Type::expression) {
-                code += "    static unsigned exp_" + std::to_string(reinterpret_cast<uintptr_t>(x)) + "[" + std::to_string(x->subnode.size()+1) + "] = {";
-                for(int i = 0; i < x->subnode.size(); i++) {
-                    code += to_string(table[x->subnode[i]]) + ", ";
-                }
-                code += to_string(nodes.size())+"};\n";
-            }
-        }
-        code += "goto LOOP;\n";
-        code += "\n";
-        // Generate funcs for each node inside main function
-        for(auto &x : this->nodes) {
-            code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + ":\n";
-            if(x->tp == Type::non_terminal) {
-                code += "    if(stack.top == stack.frames + MAX_DEPTH) {\n";
-                for (int j = 0; j < this->shortcut[x].size(); j++) {
-                    code += "        extend(" + to_string((unsigned)shortcut[x][j]) + ");\n";
-                }
-                code += "        NEXT;\n";
-                code += "        GO;\n";
-                code += "    }\n";
-                code += "    xor(" + to_string(x->subnode.size()) + ");\n";
-                code += "    store();\n";
-                code += "    switch (branch) {\n";
-                for(int j = 0; j < x->subnode.size(); j++) {
-                    code += "        case " + to_string(j) + ":\n";
-                    code += "            PC = func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(j) + ";\n";
-                    code += "        break;\n";
-                }
-                code += "    }\n";
-                code += "    GO;\n";
-            } else if(x->tp == Type::expression) {
-                code += "    if(stack.top == stack.frames + MAX_DEPTH) {\n";
-                for (int j = 0; j < this->shortcut[x].size(); j++) {
-                    code += "        extend(" + to_string((unsigned)shortcut[x][j]) + ");\n";
-                }
-                code += "        NEXT;\n";
-                code += "        GO;\n";
-                code += "    }\n";
-                code += "    store();\n";
-                code += "    PC = exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + ";\n";
-                code += "    GO;\n";
-            } else if(x->tp == Type::terminal) {
-                for (int j = 0; j < x->name.size(); j++) {
-                    code += "    extend(" + to_string((unsigned)x->name[j]) + ");\n";
-                }
-                code += "    NEXT;\n";
-                code += "    GO;\n";
-            }
-        }
-
-        // Add HALT and RETURN funcs inside main function
-        code += R"(HALT:
-    printf("%.*s\n", (int)buffer.top, buffer.data);
-    clean();
-    goto LOOP;
-RETURN:
-    PC = *(--stack.top);
-    PC++;
-    GO;
-)";
-
-        // Add LOOP func inside main function
-
-        code += "LOOP:\n";
-        code += "    if((loop_limit > 0) || (endless == true)) {\n";
-        code += "        loop_limit--;\n";
-        code += "        PC = " + init_program_name + ";\n";
-        code += "        GO;\n";
-        code += "    }\n";
-        code += "    exit(0);\n";
-        code += "}\n";
-        std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
-        ofs << code;
-        ofs.close();
-        std::cout << "Code written to file successfully." << std::endl;
+    // Macros
+    #define extend(c) { \
+        data[buffer_top++] = c; \
     }
+
+    #define clean() { \
+        buffer_top = 0; \
+    }
+
+    #define pop() (--stack_top)
+
+    #define store() do { \
+        *(stack_top++) = PC; \
+    } while (0)
+
+    #define NEXT() (PC++)
+
+// XOR shift algorithm to generate random numbers
+#define xor(l) do { \
+    asm volatile ( \
+        "eor %w[seed], %w[seed], %w[seed], lsl #13\n\t" \
+        "eor %w[seed], %w[seed], %w[seed], lsr #17\n\t" \
+        "eor %w[seed], %w[seed], %w[seed], lsl #5\n\t" \
+        : [seed] "+r" (seed) \
+    ); \
+    branch = seed % (l); \
+} while(0)
+
+    // Macro for the computed goto
+    #define GO switch(*PC) { \
+    )";
+
+    // Create the label mapping
+    map<Node*, int> table;
+    code += "    ";
+    for (int i = 0; i < nodes.size(); i++) {
+        table[nodes[i]] = i;
+        code += "case " + to_string(i) + ": goto func_" + to_string(reinterpret_cast<uintptr_t>(nodes[i])) + "; ";
+    }
+    code += "case " + to_string(nodes.size()) + ": goto RETURN; ";
+    code += "case " + to_string(nodes.size() + 1) + ": goto HALT; }\n";
+
+    // Start of main function
+    code += R"(
+    int main() {
+        // Declare variables as register variables
+        register unsigned seed asm("x19") = (unsigned)time(NULL);  // Random seed
+        register unsigned branch asm("x20");                       // Random branch index
+        register unsigned *PC asm("x21");                          // Program counter
+        register void **stack_top asm("x22") = frames;             // Stack top pointer
+        register unsigned buffer_top asm("x23") = 0;               // Buffer top index
+        register unsigned loop_limit asm("x24");                   // Loop limit
+        register bool endless asm("x25") = false;                  // Endless loop flag
+    )";
+
+    code += "    loop_limit = " + to_string(count) + ";\n";
+    if (count == -1)
+    {
+        code += "    endless = true;\n";
+    }
+
+    string init_program_name = "";
+
+    // Add programs (modified for func-based implementation inside main)
+    for (auto &x : this->nodes) {
+        if (x->tp == Type::non_terminal) {
+            for (int i = 0; i < x->subnode.size(); i++) {
+                if (x != this->start) {
+                    code += "    static unsigned func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { " + to_string(table[x->subnode[i]]) + ", " + to_string(nodes.size()) + "};\n";
+                } else {
+                    code += "    static unsigned func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { " + to_string(table[x->subnode[i]]) + ", " + to_string(nodes.size() + 1) + "};\n";
+                    init_program_name = "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i);
+                }
+            }
+        } else if (x->tp == Type::expression) {
+            code += "    static unsigned exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + "[" + to_string(x->subnode.size() + 1) + "] = {";
+            for (int i = 0; i < x->subnode.size(); i++) {
+                code += to_string(table[x->subnode[i]]) + ", ";
+            }
+            code += to_string(nodes.size()) + "};\n";
+        }
+    }
+
+    code += "    goto LOOP;\n";
+    code += "\n";
+
+    // Generate functions for each node inside main function
+    for (auto &x : this->nodes) {
+        code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + ":\n";
+        if (x->tp == Type::non_terminal) {
+            code += "    if (stack_top == frames + MAX_DEPTH) {\n";
+            for (size_t j = 0; j < this->shortcut[x].size(); j++) {
+                code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
+            }
+            code += "        NEXT();\n";
+            code += "        GO;\n";
+            code += "    }\n";
+            code += "    xor(" + to_string(x->subnode.size()) + ");\n";
+            code += "    store();\n";
+            code += "    switch (branch) {\n";
+            for (int j = 0; j < x->subnode.size(); j++) {
+                code += "        case " + to_string(j) + ":\n";
+                code += "            PC = func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(j) + ";\n";
+                code += "            break;\n";
+            }
+            code += "    }\n";
+            code += "    GO;\n";
+        } else if (x->tp == Type::expression) {
+            code += "    if (stack_top == frames + MAX_DEPTH) {\n";
+            for (size_t j = 0; j < this->shortcut[x].size(); j++) {
+                code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
+            }
+            code += "        NEXT();\n";
+            code += "        GO;\n";
+            code += "    }\n";
+            code += "    store();\n";
+            code += "    PC = exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + ";\n";
+            code += "    GO;\n";
+        } else if (x->tp == Type::terminal) {
+            for (size_t j = 0; j < x->name.size(); j++) {
+                code += "    extend(" + to_string((unsigned)x->name[j]) + ");\n";
+            }
+            code += "    NEXT();\n";
+            code += "    GO;\n";
+        }
+    }
+
+    // Add HALT and RETURN labels inside main function
+    code += R"(HALT:
+        printf("%.*s\n", (int)buffer_top, data);
+        clean();
+        goto LOOP;
+    RETURN:
+        PC = *(--stack_top);
+        PC++;
+        GO;
+    )";
+
+    // Add LOOP label inside main function
+    code += "LOOP:\n";
+    code += "    if ((loop_limit > 0) || endless) {\n";
+    code += "        if (loop_limit > 0) loop_limit--;\n";
+    code += "        stack_top = frames;  // Reset stack top\n";
+    code += "        buffer_top = 0;      // Reset buffer top\n";
+    code += "        PC = " + init_program_name + ";\n";
+    code += "        GO;\n";
+    code += "    }\n";
+    code += "    return 0;\n";
+    code += "}\n";
+
+    // Finish writing to the file
+    std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
+    ofs << code;
+    ofs.close();
+    std::cout << "Code written to file successfully." << std::endl;
+}
+
     private:
         vector<Node *> nodes;
         map<string, Node *> mp;

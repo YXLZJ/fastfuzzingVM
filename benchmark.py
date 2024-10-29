@@ -18,7 +18,6 @@ models = ["subroutine"]
 for model in models:
     subprocess.run(["clang++", "-std=c++20", model+".cpp", "-o", model])
 
-
 directory = './grammars'
 files = os.listdir(directory)
 files.remove('recursive.json')
@@ -27,7 +26,6 @@ print(files)
 
 depth = [10,20,30,40,50,60,70,80,90,100,110,120]
 
-result = {}
 timeout = 20  # Timeout for each test in seconds
 
 def set_non_blocking(fd):
@@ -59,7 +57,7 @@ def compile_and_run(program_name, file_name, depth_value):
                 ["./"+program_name, "-p", f"./grammars/{file_name}", "-d", str(depth_value), "-o", current_file_name, "--endless"],
                 check=True, timeout=timeout
             )
-            ## Switch connot be compiled with optimisation level 2
+            ## Switch cannot be compiled with optimisation level 3
             if ("switch" in program_name) or ("baresubroutine" in program_name):
                 subprocess.run(
                     ["clang", current_file_name,"-o", output_file],
@@ -128,65 +126,65 @@ def compile_and_run(program_name, file_name, depth_value):
         print(f"Unexpected error: {program_name} {file_name} {depth_value} - {e}")
         return 0
 
-# Main execution loop
-for program_name in models:
-    result[program_name] = {}
-    for file_name in files:
-        result[program_name][file_name] = {}
-        for depth_value in depth:
-            if any(substring in file_name for substring in ["math", "query", "control_flow"]) and depth_value > 64:
-                continue
-            output_speed = compile_and_run(program_name, file_name, depth_value)
-            result[program_name][file_name][depth_value] = output_speed
+def run_tests(num_rounds):
+    result = {}
+    for program_name in models:
+        result[program_name] = {}
+        for file_name in files:
+            result[program_name][file_name] = {}
+            for depth_value in depth:
+                if any(substring in file_name for substring in ["math", "query", "control_flow"]) and depth_value > 64:
+                    continue
+                if depth_value not in result[program_name][file_name]:
+                    result[program_name][file_name][depth_value] = []
+                for round_number in range(num_rounds):
+                    output_speed = compile_and_run(program_name, file_name, depth_value)
+                    result[program_name][file_name][depth_value].append(output_speed)
+    print("Final results:", result)
 
-print("Final results:", result)
+    # Convert the result to MB/s
+    for program_name in result:
+        for file_name in result[program_name]:
+            for depth_value in result[program_name][file_name]:
+                speeds = result[program_name][file_name][depth_value]
+                result[program_name][file_name][depth_value] = [x / 1024 / 1024 for x in speeds]
 
-## convert the result in MB/s
-for i in range(len(models)):
-    program_name = models[i]
-    for j in range(len(files)):
-        file_name = files[j]
-        for k in range(len(depth)):
-            depth_value = depth[k]
-            if program_name in result and file_name in result[program_name] and depth_value in result[program_name][file_name]:
-                result[program_name][file_name][depth_value] = result[program_name][file_name][depth_value] / 1024 / 1024
+    # Read existing data into a list
+    data_list = []
+    try:
+        with open('results2.csv', mode='r', newline='') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                data_list.append(row)
+    except FileNotFoundError:
+        # If the file does not exist, we'll create it later
+        pass
 
-import csv
+    # Update the data list with new results
+    for program_name in result:
+        for file_name in result[program_name]:
+            for depth_value in result[program_name][file_name]:
+                output_speeds = result[program_name][file_name][depth_value]
+                for round_number, avg_throughput_rate in enumerate(output_speeds, start=1):
+                    data_list.append({
+                        'Program': program_name,
+                        'File': file_name,
+                        'Depth': str(depth_value),
+                        'Round': str(round_number),
+                        'Throughput Rate (MB/s)': str(avg_throughput_rate)
+                    })
 
-# Read existing data into a dictionary
-data_dict = {}
+    # Write the updated data back to the CSV file
+    with open('results2.csv', mode='w', newline='') as file:
+        fieldnames = ['Program', 'File', 'Depth', 'Round', 'Throughput Rate (MB/s)']
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data_list:
+            writer.writerow(row)
 
-try:
-    with open('results2.csv', mode='r', newline='') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            key = (row['Program'], row['File'], row['Depth'])
-            data_dict[key] = row['Average Throughput Rate (MB/s)']
-except FileNotFoundError:
-    # If the file does not exist, we'll create it later
-    pass
+    print("Results have been updated in results2.csv")
 
-# Update the dictionary with new results
-for program_name, files_dict in result.items():
-    for file_name, depths_dict in files_dict.items():
-        for depth_value, avg_throughput_rate in depths_dict.items():
-            key = (program_name, file_name, str(depth_value))
-            data_dict[key] = str(avg_throughput_rate)
-
-# Write the updated data back to the CSV file
-with open('results2.csv', mode='w', newline='') as file:
-    fieldnames = ['Program', 'File', 'Depth', 'Average Throughput Rate (MB/s)']
-    writer = csv.DictWriter(file, fieldnames=fieldnames)
-    writer.writeheader()
-    for key, avg_throughput_rate in data_dict.items():
-        program_name, file_name, depth_value = key
-        writer.writerow({
-            'Program': program_name,
-            'File': file_name,
-            'Depth': depth_value,
-            'Average Throughput Rate (MB/s)': avg_throughput_rate
-        })
-
-print("Results have been updated in results2.csv")
-
-
+# Example usage:
+if __name__ == "__main__":
+    num_rounds = 20  # You can change this value as needed
+    run_tests(num_rounds)
