@@ -79,6 +79,7 @@ public:
 
     void JIT(string file, int count)
 {
+    // Start building the code string with necessary includes and definitions
     string code = R"(#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -86,10 +87,11 @@ public:
 #include <stdbool.h>
 #define BUFFER_SIZE (512*1024*1024)   // Buffer for storing text
 )";
+    // Define MAX_DEPTH based on the class member variable
     code += "#define MAX_DEPTH " + to_string(this->maxdepth) + "\n";
 
-    // Eliminate structures and declare variables directly
-    code += R"(
+    // Define the Buffer structure
+    code += R"(// Declare buffer
 char data[BUFFER_SIZE];
 
 
@@ -143,105 +145,161 @@ int main() {
     unsigned loop_limit = )" + to_string(count) + R"(;
     )";
 
-    // Initialize loop limit and endless flag
-    code += "    loop_limit = " + to_string(count) + ";\n";
     if (count == -1)
     {
-        code += "    endless = true;\n";
-    }        
-
-    // Add Instruction table
-    map<Node*,int> offset;
-    code += "    static void * cf[] = {";
-    for(int i=0;i<nodes.size();i++) {
-        code += "&&func_" + to_string(reinterpret_cast<uintptr_t>(nodes[i])) + ", ";
-        offset[nodes[i]] = i;
+        code += "register bool endless = true;\n";
+    } else {
+        code += "register bool endless = false;\n";
     }
-    // Return and halt labels
-    code += "&&RETURN, &&HALT};\n";
+    code += R"(
+    goto LOOP;
+)";
 
     string init_program_name = "";
-    // Add programs (modified for func-based implementation inside main)
+    map<Node*,vector<pair<vector<Node*>, vector<Node*>>>> subexpressions;
+    // Add program instructions for each node
     for(auto &x : this->nodes) {
         if(x->tp == Type::non_terminal) {
             for(int i = 0; i < x->subnode.size(); i++) {
                 if(x != this->start) {
-                    code += "    static void **func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { cf+" + to_string(offset[x->subnode[i]]) + ", cf+" + to_string(nodes.size()) + "};\n";
+                    if(x->subnode[i]->tp == Type::expression){
+                        code += "    static void *func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { &&func_" + to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + "_sub0, &&RETURN };\n";
+                    } else{
+                        code += "    static void *func_" + to_string(reinterpret_cast<uintptr_t>(x)) +
+                            "_op" + to_string(i) + "[2] = { &&func_" +
+                            to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + ", &&RETURN };\n";
+                    }
                 } else {
-                    code += "    static void **func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i) + "[2] = { cf+" + to_string(offset[x->subnode[i]]) + ", cf+" + to_string(nodes.size() + 1) + "};\n";
+                    if(x->subnode[i]->tp == Type::expression){
+                        code += "    static void *func_" + to_string(reinterpret_cast<uintptr_t>(x)) +
+                            "_op" + to_string(i) + "[2] = { &&func_" +
+                            to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + "_sub0, &&HALT };\n";
+                    } else{
+                        code += "    static void *func_" + to_string(reinterpret_cast<uintptr_t>(x)) +
+                            "_op" + to_string(i) + "[2] = { &&func_" +
+                            to_string(reinterpret_cast<uintptr_t>(x->subnode[i])) + ", &&HALT };\n";
+                    }
                     init_program_name = "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(i);
                 }
             }
         } else if(x->tp == Type::expression) {
-            code += "    static void **exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + "[" + to_string(x->subnode.size() + 1) + "] = {";
-            for(int i = 0; i < x->subnode.size(); i++) {
-                code += "cf+" + to_string(offset[x->subnode[i]]) + ", ";
+            for(int i=0;i<x->subnode.size();i++){
+                Node* current =  x->subnode[i];
+                vector<Node*> temp;
+                vector<Node*> terminals;
+                if(current->tp == Type::terminal){
+                    while(i<x->subnode.size() && x->subnode[i]->tp == Type::terminal){
+                        terminals.push_back(x->subnode[i++]);
+                    }
+                    while(i<x->subnode.size() && x->subnode[i]->tp == Type::non_terminal ){
+                        temp.push_back(x->subnode[i++]);
+                    }
+                    i--;
+                } else {
+                    while(i<x->subnode.size() && x->subnode[i]->tp == Type::non_terminal){
+                        temp.push_back(x->subnode[i++]);
+                    }
+                    i--;
+                }
+                subexpressions[x].push_back(make_pair(terminals,temp));
             }
-            code += "cf+" + to_string(nodes.size()) + "};\n";
+            for(int i=0;i<subexpressions[x].size();i++){
+                code += "    static void *exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_sub" + to_string(i) + "[" + to_string(subexpressions[x][i].second.size() + 1) + "] = {";
+                for(int j = 0; j < subexpressions[x][i].second.size(); j++) {
+                    code += "&&func_" + to_string(reinterpret_cast<uintptr_t>(subexpressions[x][i].second[j])) + ", ";
+                }
+                if(i!=subexpressions[x].size()-1){
+                    code += "&&func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_sub" + to_string(i+1) ;
+                } else {
+                    code += "&&RETURN";
+                }
+                code += "};\n";
+            }
         }
     }
-
-    code += "    goto LOOP;\n";
     code += "\n";
-
-    // Generate functions for each node inside main function
+    // Generate functions for each node
     for(auto &x : this->nodes) {
-        code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + ":\n";
         if(x->tp == Type::non_terminal) {
+            code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + ":\n";
+            // Check for maximum recursion depth
             code += "    if(stack_top == frames + MAX_DEPTH) {\n";
             for (int j = 0; j < this->shortcut[x].size(); j++) {
                 code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
             }
             code += "        NEXT();\n";
-            code += "        goto ***PC;\n";
+            code += "        goto **PC;\n";
             code += "    }\n";
+            // Generate random branch
             code += "    xor(" + to_string(x->subnode.size()) + ");\n";
             code += "    store();\n";
             code += "    switch (branch) {\n";
             for(int j = 0; j < x->subnode.size(); j++) {
                 code += "        case " + to_string(j) + ":\n";
-                code += "            PC = func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_op" + to_string(j) + ";\n";
+                code += "            PC = func_" + to_string(reinterpret_cast<uintptr_t>(x)) +
+                        "_op" + to_string(j) + ";\n";
                 code += "            break;\n";
             }
             code += "    }\n";
-            code += "    goto ***PC;\n";
+            code += "    goto **PC;\n";
         } else if(x->tp == Type::expression) {
-            code += "    if(stack_top == frames + MAX_DEPTH) {\n";
-            for (int j = 0; j < this->shortcut[x].size(); j++) {
-                code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
+            if(subexpressions[x].size() == 0){
+                code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_sub0 :\n";
+                code += "        NEXT();\n";
+                code += "        goto **PC;\n";
+                continue;
             }
-            code += "        NEXT();\n";
-            code += "        goto ***PC;\n";
-            code += "    }\n";
-            code += "    store();\n";
-            code += "    PC = exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + ";\n";
-            code += "    goto ***PC;\n";
+            for(int i=0; i<subexpressions[x].size();i++){
+                code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_sub" + to_string(i) + ":\n";
+                if(i==0){
+                    code += "    if(stack_top == frames + MAX_DEPTH) {\n";
+                    for (int j = 0; j < this->shortcut[x].size(); j++) {
+                        code += "        extend(" + to_string((unsigned)this->shortcut[x][j]) + ");\n";
+                    }
+                    code += "        NEXT();\n";
+                    code += "        goto **PC;\n";
+                    code += "    }\n";
+                    code += "    store();\n";
+                }
+                for(int j=0;j<subexpressions[x][i].first.size() ;j++){
+                    for(int k=0;k<subexpressions[x][i].first[j]->name.size();k++){
+                        code +="    extend(" + to_string((unsigned)subexpressions[x][i].first[j]->name[k]) + ");\n";
+                    }
+                }
+                code += "    PC = exp_" + to_string(reinterpret_cast<uintptr_t>(x)) + "_sub" + to_string(i) + ";\n";
+                code += "    goto **PC;\n";
+            }
+            
         } else if(x->tp == Type::terminal) {
+            code += "func_" + to_string(reinterpret_cast<uintptr_t>(x)) + ":\n";
+            // Extend buffer with terminal symbols
             for (int j = 0; j < x->name.size(); j++) {
                 code += "    extend(" + to_string((unsigned)x->name[j]) + ");\n";
             }
             code += "    NEXT();\n";
-            code += "    goto ***PC;\n";
+            code += "    goto **PC;\n";
         }
     }
 
-    // Add HALT and RETURN labels inside main function
+    // Define HALT and RETURN labels
     code += R"(HALT:
+    // Print the buffer content
     printf("%.*s\n", (int)buffer_top, data);
-    clean();
+    clean();  // Clean the buffer
     goto LOOP;
 RETURN:
+    // Pop from the stack and proceed to the next instruction
     PC = *(--stack_top);
     PC++;
-    goto ***PC;
+    goto **PC;
 )";
 
-    // Add LOOP label inside main function
+    // Define the LOOP label
     code += "LOOP:\n";
     code += "    if((loop_limit > 0) || endless) {\n";
     code += "        loop_limit--;\n";
     code += "        PC = " + init_program_name + ";\n";
-    code += "        goto ***PC;\n";
+    code += "        goto **PC;\n";
     code += "    }\n";
     code += "    return 0;\n";
     code += "}\n";

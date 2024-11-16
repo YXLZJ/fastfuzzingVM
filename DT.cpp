@@ -116,15 +116,13 @@ unsigned branch;     // To hold branch value
 void **PC;           // Program counter
 
 // XOR shift algorithm to generate random numbers
-#define xor(l) do { \
-    asm volatile ( \
-        "eor %w[seed], %w[seed], %w[seed], lsl #13\n\t" \
-        "eor %w[seed], %w[seed], %w[seed], lsr #17\n\t" \
-        "eor %w[seed], %w[seed], %w[seed], lsl #5\n\t" \
-        : [seed] "+r" (seed) \
-    ); \
-    branch = seed % (l); \
-} while(0)
+// xor to get random number
+#define xor(l) \
+    seed ^= seed << 13; \
+    seed ^= seed >> 17; \
+    seed ^= seed << 5; \
+    branch = seed % l
+
 
 // Pop operation on the stack
 #define pop() (--stack_top)
@@ -139,14 +137,13 @@ void **PC;           // Program counter
 
 int main() {
     // Declare local variables as register variables
-    register unsigned seed asm("x19") = (unsigned)time(NULL);
-    register unsigned branch asm("x20");
-    register void **PC asm("x21");
-    register void **stack_top asm("x22") = frames;  // Initialize stack_top
-    register unsigned buffer_top asm("x23") = 0;          // Initialize buffer_top
-    register unsigned loop_limit asm("x24") = )" + to_string(count) + R"(;
+    unsigned seed  = (unsigned)time(NULL);
+    unsigned branch;
+    void **PC;
+    void **stack_top  = frames;  // Initialize stack_top
+    unsigned buffer_top  = 0;          // Initialize buffer_top
+    unsigned loop_limit = )" + to_string(count) + R"(;
     )";
-
     if (count == -1)
     {
         code += "register bool endless = true;\n";

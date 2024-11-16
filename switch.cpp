@@ -111,15 +111,11 @@ public:
     #define NEXT() (PC++)
 
 // XOR shift algorithm to generate random numbers
-#define xor(l) do { \
-    asm volatile ( \
-        "eor %w[seed], %w[seed], %w[seed], lsl #13\n\t" \
-        "eor %w[seed], %w[seed], %w[seed], lsr #17\n\t" \
-        "eor %w[seed], %w[seed], %w[seed], lsl #5\n\t" \
-        : [seed] "+r" (seed) \
-    ); \
-    branch = seed % (l); \
-} while(0)
+#define xor(l) \
+    seed ^= seed << 13; \
+    seed ^= seed >> 17; \
+    seed ^= seed << 5; \
+    branch = seed % l
 
     // Macro for the computed goto
     #define GO switch(*PC) { \
@@ -138,14 +134,12 @@ public:
     // Start of main function
     code += R"(
     int main() {
-        // Declare variables as register variables
-        register unsigned seed asm("x19") = (unsigned)time(NULL);  // Random seed
-        register unsigned branch asm("x20");                       // Random branch index
-        register unsigned *PC asm("x21");                          // Program counter
-        register void **stack_top asm("x22") = frames;             // Stack top pointer
-        register unsigned buffer_top asm("x23") = 0;               // Buffer top index
-        register unsigned loop_limit asm("x24");                   // Loop limit
-        register bool endless asm("x25") = false;                  // Endless loop flag
+        unsigned seed  = (unsigned)time(NULL);
+        unsigned branch;
+        void **PC;
+        void **stack_top  = frames;  // Initialize stack_top
+        unsigned buffer_top  = 0;          // Initialize buffer_top
+        unsigned loop_limit = )" + to_string(count) + R"(;
     )";
 
     code += "    loop_limit = " + to_string(count) + ";\n";
